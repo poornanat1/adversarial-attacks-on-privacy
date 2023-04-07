@@ -17,3 +17,5 @@ dependencies:
       - spacy==3.4.4
       - torchtext==0.14.1
       - transformers==4.27.4
+      - opendatasets
+      - nltk==3.8.1
