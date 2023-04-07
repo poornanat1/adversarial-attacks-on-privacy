@@ -3,8 +3,9 @@
 # HuggingFace Tokenizer: https://huggingface.co/bert-base-uncased
 # Encode_plus: https://huggingface.co/docs/transformers/v4.27.2/en/internal/tokenization_utils#transformers.PreTrainedTokenizerBase.encode_plus
 # Get tokens from id: https://stackoverflow.com/questions/63607919/tokens-returned-in-transformers-bert-model-from-encode, https://huggingface.co/docs/transformers/main_classes/tokenizer#transformers.PreTrainedTokenizer.convert_ids_to_tokens
+# Faker for geenerating fake information: https://github.com/joke2k/faker
 
-# Run this file using: python data_preprocess.py --file_path '/data/raw/mtsamples.csv'
+# Run this file using: python data_preprocess.py --file_path '/data/raw/mtsamples.csv' >> ../data/logs/data_preprocess.log
 # If you don't have the file, this script can download it from Kaggle automatically
 
 import argparse
@@ -16,6 +17,8 @@ import torch
 from transformers import AutoTokenizer
 import opendatasets as od
 import os
+from faker import Faker
+import random
 
 parser = argparse.ArgumentParser(description='CS7643 Project')
 parser.add_argument('--file_path', default='/data/raw/mtsamples.csv')
@@ -63,15 +66,32 @@ def remove_stopwords_punctuation(text):
     return ' '.join(words)
     
 
-def add_sensitive_data():
-    # TO-DO:
-    # Create synthetic data to simulate sensitive information
-    # Returns a string for concatentation
-    return None
+def add_personal_info(fake, input):
+    # Ref: https://github.com/joke2k/faker
+    # Create fake personal information using Faker
+    # Returns a concatenated string
+    profile = fake.profile()
+    phone_number = fake.phone_number()
+    fields = ['Full name: ' + profile['name'], 
+            'Address: ' + profile['address'], 
+            'Blood type: ' + profile['blood_group'], 
+            'Birthdate: ' + profile['birthdate'].strftime("%m/%d/%Y"),
+            'Sex: ' + profile['sex'],
+            'Email address: ' + profile['mail'],
+            'Occupation: ' + profile['job'],
+            'Phone Number: ' + phone_number]
+    input = ' '.join(fields) + ' ' + input
+    return input
 
 def tokenize_data(file_path):
     # Load the BERT tokenizer (https://huggingface.co/bert-base-uncased)
     tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+
+    # Initialize a faker generator
+    fake = Faker(['en', 'en_AU', 'en_US', 'en_CA', 'en_GB', 'en_IE', 'en_IN', 'en_NZ', 'en_PH', 'en_TH'])
+    # Set seeds to 123
+    Faker.seed(123)
+    random.seed(123)
 
     # Open the data file and perform tokenization
     with open(file_path, 'r') as csv_file:
@@ -104,6 +124,12 @@ def tokenize_data(file_path):
                 continue
             else:
                 unique_rows.add(input)
+
+            # Add personal information to input with probability 50%
+            p=0.5
+            if random.random() < p:
+                print(f'Adding sensitive information to row {row_num}')
+                input = add_personal_info(fake, input)
 
             # Remove stopwords and punctuation before encoding
             input = remove_stopwords_punctuation(input)
