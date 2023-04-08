@@ -19,3 +19,4 @@ dependencies:
       - transformers==4.27.4
       - opendatasets
       - nltk==3.8.1
+      - Faker==18.4.0
