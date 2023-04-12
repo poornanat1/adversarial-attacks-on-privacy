@@ -12,6 +12,8 @@ import argparse
 import time
 import csv
 import re
+import nltk #added by Stephen
+nltk.download('stopwords') #added by Stephen
 from nltk.corpus import stopwords
 import torch
 from transformers import AutoTokenizer
@@ -160,16 +162,16 @@ def main():
     
     # Create new data directory structure
     root = os.path.dirname(os.getcwd())
-    if not os.path.exists(root + '/data'):
-        os.makedirs(root + '/data')
-    if not os.path.exists(root + '/data/processed'):
-        os.makedirs(root + 'data/processed')
+    if not os.path.exists(root + '/data'): #TODO comment/uncomment out line as necessary
+        os.makedirs(root + '/data') #TODO comment/uncomment out line as necessary
+    if not os.path.exists(root + '/data/processed'): #TODO comment/uncomment out line as necessary
+        os.makedirs(root + 'data/processed') #TODO comment/uncomment out line as necessary
 
     # Download data
     file_path = root + file_path
     print(file_path)
-    if not os.path.exists(file_path):
-        download_data(root)
+    if not os.path.exists(file_path): #TODO comment/uncomment out line as necessary
+        download_data(root) #TODO comment/uncomment out line as necessary
 
     # Tokenize and deduplicate data
     tokenized_data, attention_masks, tokenizer = tokenize_data(file_path)
