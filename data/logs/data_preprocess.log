@@ -3851,6 +3851,3 @@ Saving tokens as CSV
 Tokenized shape: torch.Size([2350, 1, 8000])
 Attention masks shape: torch.Size([2350, 1, 8000])
 Elapsed time: 95.6 seconds
-/Users/stephenvalenta/Dropbox/OMSCS/DL/Group_project/adversarial-attacks-on-privacy/data/raw/mtsamples.csv
-Please provide your Kaggle credentials to download this dataset. Learn more: http://bit.ly/kaggle-creds
-Your Kaggle username: 

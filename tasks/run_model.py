@@ -1,6 +1,8 @@
 # Run this file while in the "tasks" directory using: python run_model.py
-# If you don't have the "evaluate" package in your environment, run: conda env update --file environment.yaml --prune
+# If you don't have the "evaluate" package for rouge_score in your environment, run: conda env update --file environment.yaml --prune
     #source: https://stackoverflow.com/questions/42352841/how-to-update-an-existing-conda-environment-with-a-yml-file
+
+#Sources: We used code from assignment 4 as an outline
 
 import torch
 import torch.optim as optim
@@ -69,52 +71,54 @@ def evaluate(model, dataloader, criterion, device='cpu'):
     avg_loss = total_loss / len(dataloader)
     return total_loss, avg_loss
 
-#load .pt files in as a tensor & combine
-data = torch.load('../data/processed/tokenized_data.pt') #TODO delete
-# input_data = torch.load('../data/processed/tokenized_input_data.pt) #TODO uncomment
-# target_data = torch.load(/data/processed/tokenized_target_data.pt) #TODO uncomment
-# data = torch.concat(description_data) #, summary_data) #TODO check concat dimension and uncomment
+def main():
+    #load .pt files in as a tensor & combine
+    data = torch.load('../data/processed/tokenized_data.pt') #TODO delete
+    # input_data = torch.load('../data/processed/tokenized_input_data.pt) #TODO uncomment
+    # target_data = torch.load(/data/processed/tokenized_target_data.pt) #TODO uncomment
+    # data = torch.concat(description_data) #, summary_data) #TODO check concat dimension and uncomment
 
-#split data into train, validation, and test
-generator = torch.Generator().manual_seed(42) # define a generator to make resuls reproducable
-train_data, val_data, test_data = random_split(data, [0.8,0.1, 0.1], generator = generator)
+    #split data into train, validation, and test
+    generator = torch.Generator().manual_seed(42) # define a generator to make results reproducable
+    train_data, val_data, test_data = random_split(data, [0.8,0.1, 0.1], generator = generator)
 
-#define Dataloaders for each train, val, and test
-batch_size = 128
-train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size= batch_size)
+    #define Dataloaders for each train, val, and test
+    batch_size = 128
+    train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size= batch_size)
 
-# Define hyperparameters
-EPOCHS = 2 #TODO update
-learning_rate = 1e-3
+    # Define hyperparameters
+    EPOCHS = 2 #TODO update
+    learning_rate = 1e-3
 
-# Declare models, optimizer, and loss function
-# set_seed_nb() #TODO uncomment?
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print("You are using device: %s" % device)
-input_size, emb_size, linear_size = 1000, 10, 10
-model  = Summarizer(input_size, emb_size, linear_size) #TODO update
-optimizer = optim.Adam(model.parameters(), lr = learning_rate) #TODO update
-# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer) #TODO update or delete
-criterion = rouge_score.load("rouge") #TODO update to use ROUGE metric https://huggingface.co/course/chapter7/5?fw=tf#metrics-for-text-summarization
-# criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX) #TODO delete
+    # Declare models, optimizer, and loss function
+    # set_seed_nb() #TODO uncomment?
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print("You are using device: %s" % device)
+    input_size, emb_size, linear_size = 1000, 10, 10
+    model  = Summarizer(input_size, emb_size, linear_size) #TODO update
+    optimizer = optim.Adam(model.parameters(), lr = learning_rate) #TODO update
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer) #TODO update or delete
+    criterion = rouge_score.load("rouge") #TODO update to use ROUGE metric https://huggingface.co/course/chapter7/5?fw=tf#metrics-for-text-summarization
+    # criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX) #TODO delete
 
+    #run training and eval
+    # save data for plots:
+    transformer_train_perplexity = []
+    transformer_val_perplexity = []
+    for epoch_idx in range(EPOCHS):
+        print("-----------------------------------")
+        print("Epoch %d" % (epoch_idx + 1))
+        print("-----------------------------------")
 
+        train_loss, avg_train_loss = train(model, train_loader, optimizer, criterion, device=device)
+        # scheduler.step(train_loss) TODO uncomment or delete
 
-#run training and eval
-# save data for plots:
-transformer_train_perplexity = []
-transformer_val_perplexity = []
-for epoch_idx in range(EPOCHS):
-    print("-----------------------------------")
-    print("Epoch %d" % (epoch_idx + 1))
-    print("-----------------------------------")
+        val_loss, avg_val_loss = evaluate(model, val_loader, criterion, device=device)
 
-    train_loss, avg_train_loss = train(model, train_loader, optimizer, criterion, device=device)
-    # scheduler.step(train_loss) TODO uncomment or delete
+        print("Training Loss: %.4f. Validation Loss: %.4f. " % (avg_train_loss, avg_val_loss))
+        print("Training Perplexity: %.4f. Validation Perplexity: %.4f. " % (np.exp(avg_train_loss), np.exp(avg_val_loss)))
+        transformer_train_perplexity.append(np.exp(avg_train_loss))
+        transformer_val_perplexity.append(np.exp(avg_val_loss))
 
-    val_loss, avg_val_loss = evaluate(model, val_loader, criterion, device=device)
-
-    print("Training Loss: %.4f. Validation Loss: %.4f. " % (avg_train_loss, avg_val_loss))
-    print("Training Perplexity: %.4f. Validation Perplexity: %.4f. " % (np.exp(avg_train_loss), np.exp(avg_val_loss)))
-    transformer_train_perplexity.append(np.exp(avg_train_loss))
-    transformer_val_perplexity.append(np.exp(avg_val_loss))
+if __name__ == '__main__':
+    main()
