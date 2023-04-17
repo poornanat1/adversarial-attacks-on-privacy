@@ -165,7 +165,7 @@ def main():
     if not os.path.exists(root + '/data'): #TODO comment/uncomment out line as necessary
         os.makedirs(root + '/data') #TODO comment/uncomment out line as necessary
     if not os.path.exists(root + '/data/processed'): #TODO comment/uncomment out line as necessary
-        os.makedirs(root + 'data/processed') #TODO comment/uncomment out line as necessary
+        os.makedirs(root + '/data/processed') #TODO comment/uncomment out line as necessary
 
     # Download data
     file_path = root + file_path
