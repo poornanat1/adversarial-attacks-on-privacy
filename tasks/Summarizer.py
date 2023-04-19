@@ -6,7 +6,7 @@ class Summarizer(nn.Module):
         super(Summarizer, self).__init__()
         self.device = device
 
-        # initialize model paramters
+        # initialize model parameters
         self.input_size = input_size
         self.emb_size = emb_size
         self.linear_size = linear_size
@@ -14,7 +14,7 @@ class Summarizer(nn.Module):
         # seed_torch(0) #TODO uncomment?
  
         #define layers
-        self.embedding = nn.Embedding(self.input_size+1, self.emb_size)
+        self.embedding = nn.Embedding(self.input_size, self.emb_size)
         self.linear1 = nn.Linear(self.emb_size, self.linear_size)
         self.relu1 = nn.ReLU()
        
