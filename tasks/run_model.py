@@ -80,7 +80,12 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             summary_text = tokenizer.decode(summary_ids, skip_special_tokens=True)
             target_text = tokenizer.decode(target_ids, skip_special_tokens=True)
 
-            rouge_result = rouge.compute(predictions=summary_text[0:len(target_text)], references=target_text)
+            # Pad target text to have same length as summary text
+            pad_amount = len(summary_text) - len(target_text)
+            if pad_amount > 0:
+                target_text += " " * pad_amount
+
+            rouge_result = rouge.compute(predictions=summary_text, references=target_text)
             total_rouge += rouge_result['rouge1']
 
             progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
