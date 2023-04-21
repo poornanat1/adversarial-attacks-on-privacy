@@ -190,7 +190,7 @@ def main():
 
     # Convert the lists to PyTorch tensors
     tokenized_input_tensor = torch.stack(tokenized_input_data, dim=0)
-    attention_masks_tensor = torch.stack(attention_masks, dim=0)
+    # attention_masks_tensor = torch.stack(attention_masks, dim=0)
     tokenized_target_tensor = torch.stack(tokenized_target_data, dim=0)
 
     # Save the tensors to disk
@@ -207,7 +207,7 @@ def main():
     # Print the shapes of the tensors
     print('Tokenized input shape:', tokenized_input_tensor.shape)
     print('Tokenized target shape:', tokenized_target_tensor.shape)
-    print('Attention masks shape:', attention_masks_tensor.shape)
+    # print('Attention masks shape:', attention_masks_tensor.shape)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
