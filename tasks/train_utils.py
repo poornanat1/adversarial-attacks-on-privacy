@@ -26,7 +26,6 @@ def dataloader(train_data, val_data, test_data, batch_size):
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
     return train_loader, valid_loader, test_loader
 
-
 def plot_curves(train_loss_history, train_rouge_history, valid_loss_history, valid_rouge_history, path):
     # learning curves of training and validation loss
     x = list(range(len(train_loss_history)))
@@ -46,17 +45,15 @@ def plot_curves(train_loss_history, train_rouge_history, valid_loss_history, val
     ax = fig_acc.add_subplot()
     ax.plot(x, train_rouge_history, color='blue', label = 'Training')
     ax.plot(x, valid_rouge_history, color='red', label = 'Validation')
-    ax.set(title='ROUGE', ylabel='ROUGE', xlabel='Epochs')
+    ax.set(title='ROUGE Score', ylabel='ROUGE', xlabel='Epochs')
     ax.set_ylim(0, 1)
     plt.legend()
     plt.savefig(path + 'plot_rouge.png')
     # plt.show()
 
 def save_results(data, path):
-    fieldnames = list(data.keys())
-
     with open(path, 'w', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer = csv.DictWriter(file, fieldnames=data.keys())
         writer.writeheader()
-        for row in data:
-            writer.writerow(row)
+        writer.writerow(data)
+            

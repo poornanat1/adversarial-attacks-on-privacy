@@ -19,7 +19,7 @@ class Summarizer(nn.Module):
         self.linear1 = nn.Linear(in_features = self.emb_size, out_features = self.linear_size)
         self.relu1 = nn.ReLU()
         self.linear2 = nn.Linear(in_features = self.linear_size, out_features = self.output_size)
-        self.softmax = nn.Softmax(dim=0)
+        self.softmax = nn.Softmax(dim=-1)
        
     def forward(self, inputs):
         embedding = self.embedding(inputs)

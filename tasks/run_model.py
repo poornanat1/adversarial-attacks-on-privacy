@@ -38,7 +38,6 @@ def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu')
         summary = model(source)
         summary = summary.reshape(-1, summary.shape[-1])
         target = target.reshape(-1)
-        target = torch.eye(summary.shape[-1])[target]
 
         loss = criterion(summary, target)
         loss.backward()
@@ -69,7 +68,6 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             summary = model(source)
             summary = summary.reshape(-1, summary.shape[-1])
             target = target.reshape(-1)
-            target = torch.eye(summary.shape[-1])[target]
 
             loss = criterion(summary, target)
             total_loss += loss.item()
@@ -165,7 +163,7 @@ def main():
     print("Test ROUGE:", avg_test_rouge)
 
     # Save the final model
-    timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
     trial_name = f"trial_{timestamp}_lr_{learning_rate}_bs_{batch_size}"
     path = f"../results/{trial_name}/"
     os.makedirs(path)
