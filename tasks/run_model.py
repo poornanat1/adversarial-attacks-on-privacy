@@ -8,35 +8,37 @@ import torch.optim as optim
 import torch.nn as nn
 import evaluate as e  # import ROUGE metric #reference: https://huggingface.co/course/chapter7/5?fw=tf#metrics-for-text-summarization
 from tqdm import tqdm  # Tqdm progress bar
-from torch.utils.data import random_split, DataLoader
+from torch.utils.data import random_split
 from transformers import AutoTokenizer
 
+import datetime
+import time
+import os
+
 from Summarizer import Summarizer
-
-
-# Define functions
-def dataloader(train_data, val_data, test_data, batch_size):
-    train_loader = DataLoader(train_data, batch_size=batch_size,shuffle=False)
-    valid_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
-    return train_loader, valid_loader, test_loader
+from train_utils import dataloader, plot_curves, save_results
 
 
 def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu'):
     model.train()
+
     # Record total loss
     total_loss = 0.
+
     # Get the progress bar for later modification
     progress_bar = tqdm(dataloader, ascii=True)
 
+    # Mini-batch training
     for batch_idx, data in enumerate(progress_bar):
-        source = data[0].transpose(1, 0).to(device)
-        target = data[1].transpose(1, 0).to(device).float()
+        source = data[:,0].transpose(1, 0).to(device)
+        target = data[:,1].transpose(1, 0).to(device)
 
         optimizer.zero_grad()
 
         summary = model(source)
         summary = summary.reshape(-1, summary.shape[-1])
+        target = target.reshape(-1)
+        target = torch.eye(summary.shape[-1])[target]
 
         loss = criterion(summary, target)
         loss.backward()
@@ -61,11 +63,13 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
         total_rouge = 0.0
 
         for batch_idx, data in enumerate(progress_bar):
-            source = data[0].transpose(1, 0).to(device)
-            target = data[1].transpose(1, 0).to(device).float()
+            source = data[:,0].transpose(1, 0).to(device)
+            target = data[:,1].transpose(1, 0).to(device)
 
             summary = model(source)
             summary = summary.reshape(-1, summary.shape[-1])
+            target = target.reshape(-1)
+            target = torch.eye(summary.shape[-1])[target]
 
             loss = criterion(summary, target)
             total_loss += loss.item()
@@ -94,24 +98,28 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
 
 
 def main():
-    # Load preprocessed data
-    data = torch.load('../data/processed/tokenized_data.pt')
-    print(data.shape)
+    # Load preprocessed training data
+    input_data = torch.load('../data/processed/tokenized_input_data.pt')
+    target_data = torch.load('../data/processed/tokenized_target_data.pt')
+    data = torch.cat((input_data, target_data), dim=1)
     train_data, val_data, test_data = random_split(data, [0.8, 0.1, 0.1])
-
-    # Define data loaders
-    batch_size = 128
-    train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size=batch_size)
 
     # Define hyperparameters
     EPOCHS = 2
     learning_rate = 1e-3
+    input_size = torch.max(input_data).item() + 1
+    emb_size = 1000
+    linear_size = 1000
+    batch_size = 128
+    output_size = torch.max(target_data).item() + 1
+
+    # Define data loaders
+    train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size=batch_size)
 
     # Initialize model, optimizer, and loss function
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Using device:", device)
-    input_size, emb_size, linear_size = torch.max(data).item() + 1, 10, 10
-    model = Summarizer(input_size, emb_size, linear_size, device)
+    model = Summarizer(input_size, emb_size, linear_size, output_size, device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     rouge = e.load("rouge")
     criterion = nn.KLDivLoss(reduction='sum')
@@ -122,6 +130,7 @@ def main():
     train_rouge = []
     val_rouge = []
 
+    start_time = time.time()
     for epoch in range(EPOCHS):
         print("-----------------------------------")
         print("Epoch:", epoch + 1)
@@ -137,10 +146,8 @@ def main():
         train_loss, avg_train_loss, avg_train_rouge = evaluate(model, train_loader, criterion, rouge, device=device)
 
         # Print metrics
-        print("Training Loss:", avg_train_loss)
-        print("Validation Loss:", avg_val_loss)
-        print("Training ROUGE:", avg_train_rouge)
-        print("Validation ROUGE:", avg_val_rouge)
+        print("Training Loss: %.4f. Validation Loss: %.4f. " % (avg_train_loss, avg_val_loss))
+        print("Training ROUGE: %.4f. Validation ROUGE: %.4f. " % (avg_train_rouge, avg_val_rouge))
 
         # Append metrics to arrays for plotting
         train_losses.append(avg_train_loss)
@@ -148,11 +155,48 @@ def main():
         train_rouge.append(avg_train_rouge)
         val_rouge.append(avg_val_rouge)
 
+    end_time = time.time()
+    elapsed_time = round(end_time - start_time)
+    print(f"Elapsed time: {elapsed_time} seconds")
+
     # Evaluate on test set
     test_loss, avg_test_loss, avg_test_rouge = evaluate(model, test_loader, criterion, rouge, device=device)
     print("Test Loss:", avg_test_loss)
     print("Test ROUGE:", avg_test_rouge)
 
+    # Save the final model
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    trial_name = f"trial_{timestamp}_lr_{learning_rate}_bs_{batch_size}"
+    path = f"../results/{trial_name}/"
+    os.makedirs(path)
+    torch.save(model.state_dict(), path + f"{trial_name}.pt")
+
+    # Save hyperparameters and results
+    result = {'epochs': EPOCHS,
+              'learning_rate': learning_rate,
+              'input_size': input_size,
+              'output_size': output_size,
+              'emb_size': emb_size,
+              'linear_size': linear_size,
+              'batch_size': batch_size,
+              'train_loss': train_losses[-1],
+              'val_loss': val_losses[-1],
+              'test_loss': avg_test_loss,
+              'train_rouge': train_rouge[-1],
+              'val_rouge': val_rouge[-1],
+              'test_rouge': avg_test_rouge,
+              'curve_train_loss': train_losses,
+              'curve_val_loss': val_losses,
+              'curve_train_rouge': train_rouge,
+              'curve_val_rouge': val_rouge,
+              'elapsed_time_sec': elapsed_time,
+              'device': device
+              }
+    save_results(result, path+'result.csv')
+
+    # Plot curves
+    plot_curves(train_loss_history=train_losses, train_rouge_history=train_rouge,
+                valid_loss_history=val_losses, valid_rouge_history=val_rouge, path=path)
 
 if __name__ == '__main__':
     main()

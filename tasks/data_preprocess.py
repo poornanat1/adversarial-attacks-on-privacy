@@ -37,7 +37,7 @@ def save_tokens_csv(root, filename, tokenized_data, tokenizer):
         csv_writer = csv.writer(csv_file)
 
         # Write the headers
-        csv_writer.writerow(['tokenized_transcription', 'attention_mask'])
+        csv_writer.writerow(['tokenized_transcription'])
 
         # Write the tokenized data for each row
         for i in range(len(tokenized_data)):
