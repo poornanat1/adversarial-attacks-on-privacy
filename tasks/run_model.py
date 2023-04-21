@@ -1,8 +1,6 @@
 # Run this file while in the "tasks" directory using: python run_model.py
 # If you don't have the "evaluate" package for rouge_score in your environment, run: conda env update --file environment.yaml --prune
 # source: https://stackoverflow.com/questions/42352841/how-to-update-an-existing-conda-environment-with-a-yml-file
-from collections import Counter
-
 # Sources: We used code from assignment 4 as an outline
 
 import torch
