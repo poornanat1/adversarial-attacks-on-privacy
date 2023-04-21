@@ -12,6 +12,8 @@ import argparse
 import time
 import csv
 import re
+import nltk #added by Stephen
+nltk.download('stopwords') #added by Stephen
 from nltk.corpus import stopwords
 import torch
 from transformers import AutoTokenizer
@@ -35,7 +37,7 @@ def save_tokens_csv(root, filename, tokenized_data, tokenizer):
         csv_writer = csv.writer(csv_file)
 
         # Write the headers
-        csv_writer.writerow(['tokenized_transcription', 'attention_mask'])
+        csv_writer.writerow(['tokenized_transcription'])
 
         # Write the tokenized data for each row
         for i in range(len(tokenized_data)):
@@ -171,24 +173,24 @@ def main():
     args = parser.parse_args()
     file_path = args.file_path
     
-    # Create new data directory structure
+    # Create new data directory structure (comment/uncomment as necessary)
     root = os.path.dirname(os.getcwd())
-    if not os.path.exists(root + '/data'):
-        os.makedirs(root + '/data')
-    if not os.path.exists(root + '/data/processed'):
-        os.makedirs(root + 'data/processed')
+    if not os.path.exists(root + '/data'): 
+        os.makedirs(root + '/data') 
+    if not os.path.exists(root + '/data/processed'): 
+        os.makedirs(root + '/data/processed') 
 
-    # Download data
+    # Download data (comment/uncomment as necessary)
     file_path = root + file_path
     if not os.path.exists(file_path):
-        download_data(root)
+        download_data(root) 
 
     # Tokenize and deduplicate data
     tokenized_input_data, attention_masks, tokenized_target_data, tokenizer = tokenize_data(file_path)
 
     # Convert the lists to PyTorch tensors
     tokenized_input_tensor = torch.stack(tokenized_input_data, dim=0)
-    attention_masks_tensor = torch.stack(attention_masks, dim=0)
+    # attention_masks_tensor = torch.stack(attention_masks, dim=0)
     tokenized_target_tensor = torch.stack(tokenized_target_data, dim=0)
 
     # Save the tensors to disk
@@ -205,7 +207,7 @@ def main():
     # Print the shapes of the tensors
     print('Tokenized input shape:', tokenized_input_tensor.shape)
     print('Tokenized target shape:', tokenized_target_tensor.shape)
-    print('Attention masks shape:', attention_masks_tensor.shape)
+    # print('Attention masks shape:', attention_masks_tensor.shape)
 
     end_time = time.time()
     elapsed_time = end_time - start_time

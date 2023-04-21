@@ -20,5 +20,4 @@ dependencies:
       - opendatasets
       - nltk==3.8.1
       - Faker==18.4.0
-      - rouge_score
       - evaluate
