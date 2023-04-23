@@ -110,6 +110,7 @@ def main():
     linear_size = 1000
     batch_size = 128
     output_size = torch.max(target_data).item() + 1
+    max_length = input_data.shape[2]
 
     # Define data loaders
     train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size=batch_size)
@@ -117,7 +118,7 @@ def main():
     # Initialize model, optimizer, and loss function
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Using device:", device)
-    model = Summarizer(input_size, emb_size, linear_size, output_size, device)
+    model = Summarizer(input_size, emb_size, linear_size, output_size, device, max_length)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     rouge = e.load("rouge")
     criterion = nn.KLDivLoss(reduction='sum')

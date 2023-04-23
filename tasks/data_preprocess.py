@@ -175,15 +175,15 @@ def main():
     
     # Create new data directory structure (comment/uncomment as necessary)
     root = os.path.dirname(os.getcwd())
-    if not os.path.exists(root + '/data'): 
-        os.makedirs(root + '/data') 
-    if not os.path.exists(root + '/data/processed'): 
-        os.makedirs(root + '/data/processed') 
+    if not os.path.exists(root + '/data'):
+        os.makedirs(root + '/data')
+    if not os.path.exists(root + '/data/processed'):
+        os.makedirs(root + '/data/processed')
 
     # Download data (comment/uncomment as necessary)
     file_path = root + file_path
     if not os.path.exists(file_path):
-        download_data(root) 
+        download_data(root)
 
     # Tokenize and deduplicate data
     tokenized_input_data, attention_masks, tokenized_target_data, tokenizer = tokenize_data(file_path)
