@@ -18,7 +18,6 @@ import os
 from Summarizer import Summarizer
 from train_utils import dataloader, plot_curves, save_results
 
-
 def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu'):
     model.train()
 
@@ -106,19 +105,24 @@ def main():
     EPOCHS = 2
     learning_rate = 1e-3
     input_size = torch.max(input_data).item() + 1
-    emb_size = 1000
-    linear_size = 1000
+    # emb_size = 500 #TODO delete?
+    # linear_size = 200 #TODO delete?
+    hidden_size = 500
     batch_size = 128
-    output_size = torch.max(target_data).item() + 1
+    # output_size = torch.max(target_data).item() + 1 #TODO delete?
+    output_size = 200
     max_length = input_data.shape[2]
+    num_heads = 2
+    dropout = 0.2
+    out_seq_len = 10 # TODO update to make this match target sequence length
 
     # Define data loaders
     train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size=batch_size)
 
-    # Initialize model, optimizer, and loss function
+    # Initialize model, model modules, optimizer, and loss function
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Using device:", device)
-    model = Summarizer(input_size, emb_size, linear_size, output_size, device, max_length)
+    model = Summarizer(input_size, hidden_size, output_size, out_seq_len, device, max_length, num_heads, dropout)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     rouge = e.load("rouge")
     criterion = nn.KLDivLoss(reduction='sum')
