@@ -9,6 +9,9 @@ class MultiHeadAttention(nn.Module):
         # Define multi-head attention layer with input_size, num_heads attention heads
         self.attn = nn.MultiheadAttention(input_size, num_heads)
 
+        # Define layer normalization layer with input dimension input_size
+        self.norm = nn.LayerNorm(input_size)
+
         # Define linear layer for output projection
         self.out_fc = nn.Linear(input_size, input_size)
 
@@ -16,9 +19,12 @@ class MultiHeadAttention(nn.Module):
         # Permute input tensor to shape (seq_len, batch_size, input_size)
         inputs = inputs.permute(1, 0, 2)
 
+        # Apply layer normalization to input tensor
+        inputs_norm = self.norm(inputs)
+
         # Apply multi-head attention to input tensor, with key and value same as input tensor
         # Pass mask to key_padding_mask argument to ignore padding tokens
-        attn_output, _ = self.attn(inputs, inputs, inputs, key_padding_mask=mask)
+        attn_output, _ = self.attn(inputs_norm, inputs_norm, inputs_norm, key_padding_mask=mask)
 
         # Permute output tensor back to shape (batch_size, seq_len, input_size)
         attn_output = attn_output.permute(1, 0, 2)
@@ -36,8 +42,8 @@ class FeedForward(nn.Module):
         # Define first linear layer with input dimension input_size and output dimension hidden_size
         self.linear1 = nn.Linear(input_size, hidden_size)
 
-        # Define activation function (GELU)
-        self.activation = nn.GELU()
+        # Define activation function (ReLU)
+        self.activation = nn.ReLU()
 
         # Define second linear layer with input dimension hidden_size and output dimension input_size
         self.linear2 = nn.Linear(hidden_size, input_size)
