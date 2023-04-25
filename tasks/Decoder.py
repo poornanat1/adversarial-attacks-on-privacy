@@ -5,7 +5,17 @@ import torch.nn as nn
 
 class Decoder(nn.Module):
     """ The Decoder module of the Seq2Seq model
-        You will need to complete the init function and the forward function.
+        The encoder consists of a stack of “blocks”, each of which comprises two subcomponents: a self-attention layer
+        followed by a small feed-forward network. Layer normalization (Ba et al., 2016) is applied to the input of each 
+        subcomponent. We use a simplified version of layer normalization where the activations are only rescaled and no 
+        additive bias is applied. After layer normalization, a residual skip connection (He et al., 2016) adds each 
+        subcomponents input to its output. Dropout (Srivastava et al., 2014) is applied within the feed-forward network, 
+        on the skip connection, on the attention weights, and at the input and output of the entire stack.
+
+        The decoder is similar in structure to the encoder except that it includes a standard attention mechanism 
+        after each self-attention layer that attends to the output of the encoder. The self-attention mechanism in 
+        the decoder also uses a form of autoregressive or causal self-attention, which only allows the model to 
+        attend to past outputs. 
     """
 
     def __init__(self, hidden_size, num_heads, dropout=0.1):
@@ -18,24 +28,24 @@ class Decoder(nn.Module):
 
         # initialize model layers
         self.dropout_input = nn.Dropout(p=dropout)
-        self.masked_self_attention = nn.Sequential(nn.LayerNorm(self.hidden_size),
+        self.masked_self_attention = nn.Sequential(nn.LayerNorm(self.hidden_size), #TODO: update with custom simplified layer norm
                                                    torch.nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=dropout),
                                                    nn.Dropout(p=dropout)
                                                    )
         
-        self.encoder_decoder_attention = nn.Sequential(nn.LayerNorm(self.hidden_size),
+        self.encoder_decoder_attention = nn.Sequential(nn.LayerNorm(self.hidden_size), #TODO: update with custom simplified layer norm
                                                        torch.nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=dropout),
                                                        nn.Dropout(p=dropout)
                                                        )
 
         # feedforward: Two linear transformations with a ReLU activation in between (Vaswani, 2017)
-        self.feedforward = nn.Sequential(nn.LayerNorm(self.hidden_size),
+        self.feedforward = nn.Sequential(nn.LayerNorm(self.hidden_size), #TODO: update with custom simplified layer norm
                                          nn.Linear(self.hidden_size, self.hidden_size),
                                          nn.ReLU(),
                                          nn.Dropout(p=dropout),
                                          nn.Linear(self.hidden_size, self.hidden_size)
                                          )
-        self.norm_output = nn.LayerNorm(self.hidden_size)
+        self.norm_output = nn.LayerNorm(self.hidden_size) #TODO: update with custom simplified layer norm
         self.dropout_output = nn.Dropout(p=dropout)
 
     def forward(self, inputs, enc_output, attn_mask):
