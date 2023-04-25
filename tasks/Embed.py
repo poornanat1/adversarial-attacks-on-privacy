@@ -3,7 +3,6 @@ import torch.nn as nn
 
 class Embed(nn.Module):
     """ The Encoder module of the Seq2Seq model
-        You will need to complete the init function and the forward function.
     """
 
     def __init__(self, input_size, hidden_size, max_length):
