@@ -28,23 +28,27 @@ class Decoder(nn.Module):
 
         # initialize model layers
         self.dropout_input = nn.Dropout(p=dropout)
-        self.masked_self_attention = nn.Sequential(nn.LayerNorm(self.hidden_size), #TODO: update with custom simplified layer norm
-                                                   torch.nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=dropout),
-                                                   nn.Dropout(p=dropout)
-                                                   )
+        self.masked_self_attention = nn.Sequential(
+            nn.LayerNorm(self.hidden_size), #TODO: update with custom simplified layer norm
+            torch.nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=dropout),
+            nn.Dropout(p=dropout)
+        )
         
-        self.encoder_decoder_attention = nn.Sequential(nn.LayerNorm(self.hidden_size), #TODO: update with custom simplified layer norm
-                                                       torch.nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=dropout),
-                                                       nn.Dropout(p=dropout)
-                                                       )
+        self.encoder_decoder_attention = nn.Sequential(
+            nn.LayerNorm(self.hidden_size), #TODO: update with custom simplified layer norm
+            torch.nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=dropout),
+            nn.Dropout(p=dropout)
+            )
 
         # feedforward: Two linear transformations with a ReLU activation in between (Vaswani, 2017)
-        self.feedforward = nn.Sequential(nn.LayerNorm(self.hidden_size), #TODO: update with custom simplified layer norm
-                                         nn.Linear(self.hidden_size, self.hidden_size),
-                                         nn.ReLU(),
-                                         nn.Dropout(p=dropout),
-                                         nn.Linear(self.hidden_size, self.hidden_size)
-                                         )
+        self.feedforward = nn.Sequential(
+            nn.LayerNorm(self.hidden_size), #TODO: update with custom simplified layer norm
+            nn.Linear(self.hidden_size, self.hidden_size),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(self.hidden_size, self.hidden_size)
+            )
+        
         self.norm_output = nn.LayerNorm(self.hidden_size) #TODO: update with custom simplified layer norm
         self.dropout_output = nn.Dropout(p=dropout)
 
