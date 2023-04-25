@@ -26,8 +26,12 @@ class Summarizer(nn.Module):
                                 feedforward_size=self.hidden_size * 4, dropout=self.dropout)
         self.encoder2 = Encoder(num_layers=1, hidden_size=self.hidden_size, num_heads=self.num_heads,
                                 feedforward_size=self.hidden_size * 4, dropout=self.dropout)
+        
+        # initialize stack of decoder layers
+        self.dec_dropout_input = nn.Dropout(self.dropout)
         self.decoder1 = Decoder(self.hidden_size, self.num_heads, self.dropout)
         self.decoder2 = Decoder(self.hidden_size, self.num_heads, self.dropout)
+        self.dec_dropout_output = nn.Dropout(self.dropout)
 
         # initialize model final linear layer
         self.final_linear = nn.Linear(self.hidden_size, self.output_size)
@@ -81,9 +85,15 @@ class Summarizer(nn.Module):
         return output
 
     def decoder_layers(self, inputs, encoder_outputs, attn_mask):
+        # dropout at the input of the entire stack
+        inputs = self.dec_dropout_input(inputs)
+
+        # stack of decoder blocks
         decoder1 = self.decoder1(inputs, encoder_outputs, attn_mask)
-        # decoder2 = self.decoder2(decoder1, encoder_outputs, attn_mask)
-        output = decoder1
+        decoder2 = self.decoder2(decoder1, encoder_outputs, attn_mask)
+
+        # dropout at the output of the entire stack
+        output = self.dec_dropout_output(decoder2)
         return output
 
     def final_layers(self, inputs):
