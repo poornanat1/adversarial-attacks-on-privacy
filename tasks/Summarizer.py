@@ -22,9 +22,9 @@ class Summarizer(nn.Module):
         # initialize embed, decoder, and encoder layers
         self.embed_encoder = Embed(self.input_size, self.hidden_size, self.max_length)
         self.embed_decoder = Embed(self.hidden_size, self.hidden_size, self.out_seq_len)
-        self.encoder1 = Encoder(num_layers=1, hidden_size=self.hidden_size, num_heads=self.num_heads,
+        self.encoder1 = Encoder(num_layers=3, hidden_size=self.hidden_size, num_heads=self.num_heads,
                                 feedforward_size=self.hidden_size * 4, dropout=self.dropout)
-        self.encoder2 = Encoder(num_layers=1, hidden_size=self.hidden_size, num_heads=self.num_heads,
+        self.encoder2 = Encoder(num_layers=3, hidden_size=self.hidden_size, num_heads=self.num_heads,
                                 feedforward_size=self.hidden_size * 4, dropout=self.dropout)
         
         # initialize stack of decoder layers
@@ -80,8 +80,8 @@ class Summarizer(nn.Module):
 
     def encoder_layers(self, inputs):
         encoder1 = self.encoder1(inputs)
-        # encoder2 = self.encoder2(encoder1)
-        output = encoder1
+        encoder2 = self.encoder2(encoder1)
+        output = encoder2
         return output
 
     def decoder_layers(self, inputs, encoder_outputs, attn_mask):
