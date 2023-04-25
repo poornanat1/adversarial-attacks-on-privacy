@@ -1,47 +1,124 @@
 import torch
 import torch.nn as nn
 
-class Encoder(nn.Module):
-    """ The Encoder module of the Seq2Seq model
-        You will need to complete the init function and the forward function.
-    """
 
-    def __init__(self, hidden_size, num_heads, dropout=0.2):
-        super(Encoder, self).__init__()
+class MultiHeadAttention(nn.Module):
+    def __init__(self, input_size, num_heads):
+        super().__init__()
 
-        # initialize model parameters
-        self.hidden_size = hidden_size
-        self.num_heads = num_heads
-        self.dropout = dropout
+        # Define multi-head attention layer with input_size, num_heads attention heads
+        self.attn = nn.MultiheadAttention(input_size, num_heads)
 
-        # initialize model layers
-        self.self_attention = torch.nn.MultiheadAttention(self.hidden_size, self.num_heads) #TODO add dropout parameter here?
-        self.norm1 = nn.LayerNorm(self.hidden_size)
-        self.feedforward1 = nn.Linear(self.hidden_size, self.hidden_size)
-        self.relu = nn.ReLU()
-        self.feedforward2 = nn.Linear(self.hidden_size, self.hidden_size)
-        self.norm2 = nn.LayerNorm(self.hidden_size)
+        # Define linear layer for output projection
+        self.out_fc = nn.Linear(input_size, input_size)
 
-    # TODO Add drop out layers
-    # - page 4 of T5 paper: Dropout (Srivastava et al., 2014) is applied within the feed-forward network, on the skip connection, on the attention weights, and at the input and output of the entire stack.
-    # - Vaswani, 2017: We apply dropout [33] to the output of each sub-layer, before it is added to thesub-layer input and normalized. In addition, we apply dropout to the sums of the embeddings and the
-    # positional encodings in both the encoder and decoder stacks. For the base model, we use a rate of
-    # Pdrop = 0.1.
+    def forward(self, inputs, mask=None):
+        # Permute input tensor to shape (seq_len, batch_size, input_size)
+        inputs = inputs.permute(1, 0, 2)
+
+        # Apply multi-head attention to input tensor, with key and value same as input tensor
+        # Pass mask to key_padding_mask argument to ignore padding tokens
+        attn_output, _ = self.attn(inputs, inputs, inputs, key_padding_mask=mask)
+
+        # Permute output tensor back to shape (batch_size, seq_len, input_size)
+        attn_output = attn_output.permute(1, 0, 2)
+
+        # Apply linear projection to output tensor
+        outputs = self.out_fc(attn_output)
+
+        return outputs
+
+
+class FeedForward(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super().__init__()
+
+        # Define first linear layer with input dimension input_size and output dimension hidden_size
+        self.linear1 = nn.Linear(input_size, hidden_size)
+
+        # Define activation function (GELU)
+        self.activation = nn.GELU()
+
+        # Define second linear layer with input dimension hidden_size and output dimension input_size
+        self.linear2 = nn.Linear(hidden_size, input_size)
 
     def forward(self, inputs):
-        # multihead self attention
-        self_attention = self.self_attention(inputs, inputs, inputs)
+        # Apply first linear layer to input tensor
+        outputs = self.linear1(inputs)
 
-        # add and normalize #TODO check implementation per page 4 of T5 paper: After layer normalization, a residual skip connection (He et al., 2016) adds each subcomponent’s input to its output.
-        add_residual1 = inputs + self_attention[0]
-        norm1 = self.norm1(add_residual1)
-        # feed forward: Two linear transformations with a ReLU activation in between (Vaswani, 2017)
-        feedforward1 = self.feedforward1(norm1)
-        relu = self.relu(feedforward1)
-        feedforward2 = self.feedforward2(relu)
+        # Apply activation function to output of first linear layer
+        outputs = self.activation(outputs)
 
-        # add and normalize
-        add_residual2 = norm1 + feedforward2
-        norm2 = self.norm2(add_residual2)
-        output = norm2
-        return output
+        # Apply second linear layer to output of activation function
+        outputs = self.linear2(outputs)
+
+        return outputs
+
+
+class LayerNorm(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+
+        # Define layer normalization layer with input dimension input_size
+        self.norm = nn.LayerNorm(input_size)
+
+    def forward(self, inputs):
+        # Apply layer normalization to input tensor
+        return self.norm(inputs)
+
+
+class ResidualConnection(nn.Module):
+    def __init__(self, sublayer, input_size, dropout):
+        super().__init__()
+
+        # Define residual connection layer with sublayer, layer normalization, and dropout
+        self.sublayer = sublayer
+        self.norm = LayerNorm(input_size)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, inputs, *args):
+        # Save input tensor as residual
+        residual = inputs
+
+        # Apply sublayer to input tensor
+        outputs = self.sublayer(inputs, *args)
+
+        # Apply dropout to output tensor of sublayer
+        outputs = self.dropout(outputs)
+
+        # Add residual and output tensor of sublayer
+        outputs = residual + outputs
+
+        # Apply layer normalization to output tensor
+        outputs = self.norm(outputs)
+
+        return outputs
+
+
+class Encoder(nn.Module):
+    def __init__(self, num_layers, hidden_size, num_heads, feedforward_size, dropout):
+        super().__init__()
+
+        self.num_layers = num_layers
+        self.hidden_size = hidden_size
+
+        # Define the self-attention and feedforward layers as ModuleList
+        self.attention_layers = nn.ModuleList([
+            ResidualConnection(MultiHeadAttention(hidden_size, num_heads), hidden_size, dropout)
+            for _ in range(num_layers)
+        ])
+
+        self.feedforward_layers = nn.ModuleList([
+            ResidualConnection(FeedForward(hidden_size, feedforward_size), hidden_size, dropout)
+            for _ in range(num_layers)
+        ])
+
+    def forward(self, embedded_inputs):
+        # Apply the self-attention and feedforward layers to the input
+        for i in range(self.num_layers):
+            attention_output = self.attention_layers[i](embedded_inputs)  # apply the ith self-attention layer to the input
+            feedforward_output = self.feedforward_layers[i](attention_output)  # apply the ith feedforward layer to the output of the self-attention layer
+            embedded_inputs = feedforward_output  # update the input with the output of the feedforward layer
+
+        # Return the final output of the encoder
+        return embedded_inputs
