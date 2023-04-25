@@ -47,7 +47,6 @@ class Decoder(nn.Module):
         self.dropout = dropout
 
         # initialize model layers
-        self.dropout_input = nn.Dropout(p=dropout)
         self.masked_self_attention = nn.Sequential(
             T5LayerNorm(self.hidden_size), 
             torch.nn.MultiheadAttention(self.hidden_size, self.num_heads, add_bias_kv=False, dropout=dropout),
@@ -89,5 +88,5 @@ class Decoder(nn.Module):
 
         # residual skip connection adds each subcomponent’s input to its output
         output = skip_connection2 + feedforward
-        
+
         return output
