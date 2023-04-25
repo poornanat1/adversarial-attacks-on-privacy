@@ -23,37 +23,49 @@ class T5LayerNorm(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, num_layers, hidden_size, num_heads, feedforward_size, dropout):
+    def __init__(self, hidden_size, num_heads, feedforward_size, dropout):
         super().__init__()
 
-        self.num_layers = num_layers
         self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.feedforward_size = feedforward_size
 
-        # Define multi-head attention layer with input_size, num_heads attention heads
-        self.attn = nn.MultiheadAttention(hidden_size, num_heads)
-        # Define layer normalization layer with input dimension input_size
-        self.norm = T5LayerNorm(hidden_size)
-        # Define linear layer for output projection
-        self.out_fc = nn.Linear(hidden_size, hidden_size)
-        # Define first linear layer with input dimension input_size and output dimension hidden_size
-        self.linear1 = nn.Linear(hidden_size, feedforward_size)
-        # Define activation function (ReLU)
-        self.activation = nn.ReLU()
-        # Define second linear layer with input dimension feedforward_size and output dimension input_size
-        self.linear2 = nn.Linear(feedforward_size, hidden_size)
-        # Define dropout layer with dropout probability
-        self.dropout = nn.Dropout(dropout)
+        # Define self-attention layer
+        self.self_attn = nn.MultiheadAttention(hidden_size, num_heads)
+        self.norm1 = T5LayerNorm(hidden_size)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+
+        # Define feedforward network
+        self.feedforward = nn.Sequential(
+            T5LayerNorm(hidden_size),
+            nn.Linear(hidden_size, feedforward_size),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(feedforward_size, hidden_size),
+            nn.Dropout(dropout)
+        )
+
+        self.dropout3 = nn.Dropout(dropout)
+        self.dropout4 = nn.Dropout(dropout)
 
     def forward(self, embedded_inputs):
-        # For each layer of the encoder
-        for i in range(self.num_layers):
-            # Compute the self-attention of the input
-            self_attn_output, _ = self.attn(embedded_inputs, embedded_inputs, embedded_inputs)
-            # Add a residual connection to the input and normalize
-            normalized_output = self.norm(embedded_inputs + self.dropout(self_attn_output))
-            # Compute the feedforward transformation of the normalized output
-            feedforward_output = self.linear2(self.activation(self.linear1(normalized_output)))
-            # Add another residual connection to the feedforward output and normalize
-            embedded_inputs = self.norm(normalized_output + self.dropout(feedforward_output))
-        # Apply the output projection layer and return the final output of the encoder
-        return self.out_fc(embedded_inputs)
+        # Apply layer normalization and dropout
+        norm_input = self.norm1(self.dropout1(embedded_inputs))
+
+        # Apply self-attention layer
+        attn_output, _ = self.self_attn(norm_input, norm_input, norm_input)
+        attn_output = self.dropout2(attn_output)
+
+        # add residual skip connection
+        embedded_inputs = embedded_inputs + attn_output
+        embedded_inputs = self.dropout3(embedded_inputs)
+
+        # Apply feedforward network
+        feedforward_output = self.feedforward(embedded_inputs)
+
+        # add residual skip connection
+        encoded_output = embedded_inputs + feedforward_output
+        encoded_output = self.dropout4(encoded_output)
+
+        return encoded_output
