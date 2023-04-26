@@ -143,7 +143,7 @@ def tokenize_data(file_path):
             encoded_input = tokenizer.encode_plus(
                                 text=input,
                                 add_special_tokens = True,           # Add '[CLS]' and '[SEP]'
-                                max_length = 1000,                   # Pad & truncate all sequences
+                                max_length = 512,                   # Pad & truncate all sequences
                                 padding = 'max_length',
                                 truncation = True,
                                 return_attention_mask = True,        # Construct attention masks
@@ -152,7 +152,7 @@ def tokenize_data(file_path):
             encoded_target = tokenizer.encode_plus(
                                 text=target,
                                 add_special_tokens = True,           # Add '[CLS]' and '[SEP]'
-                                max_length = 10,                   # Pad & truncate all sequences
+                                max_length = 512,                   # Pad & truncate all sequences
                                 padding = 'max_length',
                                 truncation = True,
                                 return_attention_mask = False,        # Construct attention masks
@@ -190,24 +190,25 @@ def main():
 
     # Convert the lists to PyTorch tensors
     tokenized_input_tensor = torch.stack(tokenized_input_data, dim=0)
-    # attention_masks_tensor = torch.stack(attention_masks, dim=0)
+    attention_masks_tensor = torch.stack(attention_masks, dim=0)
     tokenized_target_tensor = torch.stack(tokenized_target_data, dim=0)
 
     # Save the tensors to disk
     print('Saving token tensors to disk')
     torch.save(tokenized_input_tensor, root + '/data/processed/tokenized_input_data.pt')
-    # torch.save(attention_masks_tensor, root + '/data/processed/attention_masks.pt')
+    torch.save(attention_masks_tensor, root + '/data/processed/attention_masks.pt')
     torch.save(tokenized_target_tensor, root + '/data/processed/tokenized_target_data.pt')
 
     # Save tokens to CSV
     print('Saving tokens as CSV')
     save_tokens_csv(root, '/data/processed/tokenized_input_data.csv', tokenized_input_data, tokenizer)
+    save_tokens_csv(root, '/data/processed/tokenized_attnmask_data.csv', attention_masks_tensor, tokenizer)
     save_tokens_csv(root, '/data/processed/tokenized_target_data.csv', tokenized_target_data, tokenizer)
 
     # Print the shapes of the tensors
     print('Tokenized input shape:', tokenized_input_tensor.shape)
     print('Tokenized target shape:', tokenized_target_tensor.shape)
-    # print('Attention masks shape:', attention_masks_tensor.shape)
+    print('Attention masks shape:', attention_masks_tensor.shape)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
