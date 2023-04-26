@@ -30,15 +30,13 @@ def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu')
     # Mini-batch training
     for batch_idx, data in enumerate(progress_bar):
         source = data[:,0].transpose(1, 0).to(device)
-        target = data[:,1].transpose(1, 0).to(device)
-
-        optimizer.zero_grad()
 
         summary = model(source)
         summary = summary.reshape(-1, summary.shape[-1])
-        target = target.reshape(-1)
+        target = data[:,1][:, :summary.shape[0]].transpose(1, 0).to(device)
 
-        loss = criterion(summary, target)
+        optimizer.zero_grad()
+        loss = criterion(summary.float().requires_grad_(), target.float())
         loss.backward()
 
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
@@ -62,35 +60,36 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
 
         for batch_idx, data in enumerate(progress_bar):
             source = data[:,0].transpose(1, 0).to(device)
-            target = data[:,1].transpose(1, 0).to(device)
-
+            
             summary = model(source)
             summary = summary.reshape(-1, summary.shape[-1])
-            target = target.reshape(-1)
+            target = data[:,1][:, :summary.shape[0]].transpose(1, 0).to(device)
 
-            loss = criterion(summary, target)
+            loss = criterion(summary.float(), target.float())
             total_loss += loss.item()
 
-            tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+            # # TODO: the following code needs fixing, ValueError: Mismatch in the number of predictions (59) and references (6492)
+            # tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
-            summary_ids = summary.argmax(dim=-1).squeeze().tolist()
-            target_ids = target.squeeze(dim=0).flatten().long().tolist()
+            # summary_ids = summary.argmax(dim=-1).squeeze().tolist()
+            # target_ids = target.squeeze(dim=0).flatten().long().tolist()
 
-            summary_text = tokenizer.decode(summary_ids, skip_special_tokens=True)
-            target_text = tokenizer.decode(target_ids, skip_special_tokens=True)
+            # summary_text = tokenizer.decode(summary_ids, skip_special_tokens=True)
+            # target_text = tokenizer.decode(target_ids, skip_special_tokens=True)
 
-            # Pad target text to have same length as summary text
-            pad_amount = len(summary_text) - len(target_text)
-            if pad_amount > 0:
-                target_text += " " * pad_amount
+            # # Pad target text to have same length as summary text
+            # pad_amount = len(summary_text) - len(target_text)
+            # if pad_amount > 0:
+            #     target_text += " " * pad_amount
 
-            rouge_result = rouge.compute(predictions=summary_text, references=target_text)
-            total_rouge += rouge_result['rouge1']
+            # rouge_result = rouge.compute(predictions=summary_text, references=target_text)
+            # total_rouge += rouge_result['rouge1']
 
             progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
 
     avg_loss = total_loss / len(dataloader)
-    avg_rouge = total_rouge / len(dataloader)
+    # avg_rouge = total_rouge / len(dataloader) #TODO: uncomment when ROUGE score is fixed
+    avg_rouge = 0 #TODO: remove when ROUGE score is fixed
     return total_loss, avg_loss, avg_rouge
 
 
@@ -105,16 +104,13 @@ def main():
     EPOCHS = 2
     learning_rate = 1e-3
     input_size = torch.max(input_data).item() + 1
-    # emb_size = 500 #TODO delete?
-    # linear_size = 200 #TODO delete?
-    hidden_size = 500
+    hidden_size = 512
     batch_size = 128
-    # output_size = torch.max(target_data).item() + 1 #TODO delete?
     output_size = 200
     max_length = input_data.shape[2]
     num_heads = 2
     dropout = 0.2
-    out_seq_len = 10 # TODO update to make this match target sequence length
+    out_seq_len = 10 
 
     # Define data loaders
     train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size=batch_size)
@@ -125,7 +121,8 @@ def main():
     model = Summarizer(input_size, hidden_size, output_size, out_seq_len, device, max_length, num_heads, dropout)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     rouge = e.load("rouge")
-    criterion = nn.KLDivLoss(reduction='sum')
+    criterion = nn.KLDivLoss(reduction='batchmean')
+    # criterion = nn.CrossEntropyLoss()
 
     # Define arrays to store metrics for plotting
     train_losses = []
@@ -178,9 +175,7 @@ def main():
     result = {'epochs': EPOCHS,
               'learning_rate': learning_rate,
               'input_size': input_size,
-              'output_size': output_size,
-              'emb_size': emb_size,
-              'linear_size': linear_size,
+              'out_seq_len': out_seq_len,
               'batch_size': batch_size,
               'train_loss': train_losses[-1],
               'val_loss': val_losses[-1],
