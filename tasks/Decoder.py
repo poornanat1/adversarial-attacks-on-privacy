@@ -6,64 +6,59 @@ from Encoder import T5LayerNorm
 
 
 class Decoder(nn.Module):
-    """ The Decoder module of the Seq2Seq model
-        The encoder consists of a stack of “blocks”, each of which comprises two subcomponents: a self-attention layer
-        followed by a small feed-forward network. Layer normalization (Ba et al., 2016) is applied to the input of each 
-        subcomponent. We use a simplified version of layer normalization where the activations are only rescaled and no 
-        additive bias is applied. After layer normalization, a residual skip connection (He et al., 2016) adds each 
-        subcomponents input to its output. Dropout (Srivastava et al., 2014) is applied within the feed-forward network, 
-        on the skip connection, on the attention weights, and at the input and output of the entire stack.
-
+    """ 
         The decoder is similar in structure to the encoder except that it includes a standard attention mechanism 
         after each self-attention layer that attends to the output of the encoder. The self-attention mechanism in 
         the decoder also uses a form of autoregressive or causal self-attention, which only allows the model to 
         attend to past outputs. 
     """
 
-    def __init__(self, hidden_size, num_heads, dropout=0.1):
+    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1):
         super(Decoder, self).__init__()
 
         # initialize model parameters
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.dropout = dropout
+        self.feedforward_size = feedforward_size
 
-        # initialize model layers
-        self.masked_self_attention = nn.Sequential(
-            T5LayerNorm(self.hidden_size), 
-            torch.nn.MultiheadAttention(self.hidden_size, self.num_heads, add_bias_kv=False, dropout=dropout),
-            nn.Dropout(p=dropout)
-        )
+        # Self-attention subcomponent
+        self.norm_self_attn = T5LayerNorm(self.hidden_size)
+        self.masked_self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, add_bias_kv=False, dropout=self.dropout)
+        self.dropout_self_attn = nn.Dropout(p=self.dropout)
         
-        self.encoder_decoder_attention = nn.Sequential(
-            T5LayerNorm(self.hidden_size), 
-            torch.nn.MultiheadAttention(self.hidden_size, self.num_heads, add_bias_kv=False, dropout=dropout),
-            nn.Dropout(p=dropout)
-            )
+        # Encoder-decoder attention subcomponent
+        self.norm_enc_dec_attn = T5LayerNorm(self.hidden_size)
+        self.encoder_decoder_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, add_bias_kv=False, dropout=self.dropout)
+        self.dropout_enc_dec_attn = nn.Dropout(p=self.dropout)
 
-        # feedforward: Two linear transformations with a ReLU activation in between (Vaswani, 2017)
+        # Feedforward network: Two linear transformations with a ReLU activation in between (Vaswani, 2017)
         self.feedforward = nn.Sequential(
             T5LayerNorm(self.hidden_size), 
-            nn.Linear(self.hidden_size, self.hidden_size, bias=False),
+            nn.Linear(self.hidden_size, self.feedforward_size, bias=False),
             nn.ReLU(),
-            nn.Dropout(p=dropout),
-            nn.Linear(self.hidden_size, self.hidden_size, bias=False),
-            nn.Dropout(p=dropout)
+            nn.Dropout(p=self.dropout),
+            nn.Linear(self.feedforward_size, self.hidden_size, bias=False),
+            nn.Dropout(p=self.dropout)
             )
 
     def forward(self, inputs, enc_output, attn_mask):
         # multihead self attention
-        masked_self_attention, _ = self.masked_self_attention(inputs, inputs, inputs, attn_mask=attn_mask)
+        inputs = self.norm_self_attn(inputs)
+        masked_self_attn, _ = self.masked_self_attn(inputs, inputs, inputs, attn_mask=attn_mask)
+        masked_self_attn = self.dropout_self_attn(masked_self_attn)
 
         # residual skip connection adds each subcomponent’s input to its output
-        skip_connection1 = inputs + masked_self_attention
+        skip_connection1 = inputs + masked_self_attn
         
         # encoder-decoder multihead attention
         # In "encoder-decoder attention" layers, the queries come from the previous decoder layer, and the memory keys and values come from the output of the encoder. (Vaswani, 2017)
-        encoder_decoder_attention, _ = self.encoder_decoder_attention(skip_connection1, enc_output, enc_output)
+        skip_connection1 = self.norm_enc_dec_attn(skip_connection1)
+        encoder_decoder_attn, _ = self.encoder_decoder_attn(skip_connection1, enc_output, enc_output)
+        encoder_decoder_attn = self.dropout_enc_dec_attn(encoder_decoder_attn)
 
         # residual skip connection adds each subcomponent’s input to its output
-        skip_connection2 = skip_connection1 + encoder_decoder_attention
+        skip_connection2 = skip_connection1 + encoder_decoder_attn
         
         # feed forward network
         feedforward = self.feedforward(skip_connection2)

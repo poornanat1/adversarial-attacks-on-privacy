@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 
-
+# T5LayerNorm function from: https://github.com/huggingface/transformers/blob/d95045717e1a5bd8ce71223b5b8920e27687dee4/src/transformers/models/t5/modeling_t5.py#L238
+# Please leave citation in because this function is taken directly from T5 source code.
 class T5LayerNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
         """
@@ -23,49 +24,51 @@ class T5LayerNorm(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, hidden_size, num_heads, feedforward_size, dropout):
+    '''
+        The encoder consists of a stack of “blocks”, each of which comprises two subcomponents: a self-attention layer
+        followed by a small feed-forward network. Layer normalization (Ba et al., 2016) is applied to the input of each 
+        subcomponent. We use a simplified version of layer normalization where the activations are only rescaled and no 
+        additive bias is applied. After layer normalization, a residual skip connection (He et al., 2016) adds each 
+        subcomponents input to its output. Dropout (Srivastava et al., 2014) is applied within the feed-forward network, 
+        on the skip connection, on the attention weights, and at the input and output of the entire stack.
+    '''
+    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1):
         super().__init__()
 
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.feedforward_size = feedforward_size
+        self.dropout=dropout
 
         # Define self-attention layer
-        self.self_attn = nn.MultiheadAttention(hidden_size, num_heads)
-        self.norm1 = T5LayerNorm(hidden_size)
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
+        self.norm_attn = T5LayerNorm(hidden_size)
+        self.self_attn = nn.MultiheadAttention(hidden_size, num_heads, dropout=self.dropout)
+        self.dropout_attn = nn.Dropout(p=self.dropout)
 
         # Define feedforward network
+        self.norm_ff = T5LayerNorm(hidden_size)
         self.feedforward = nn.Sequential(
-            T5LayerNorm(hidden_size),
             nn.Linear(hidden_size, feedforward_size),
             nn.ReLU(),
-            nn.Dropout(dropout),
+            nn.Dropout(p=self.dropout),
             nn.Linear(feedforward_size, hidden_size),
-            nn.Dropout(dropout)
+            nn.Dropout(p=self.dropout)
         )
 
-        self.dropout3 = nn.Dropout(dropout)
-        self.dropout4 = nn.Dropout(dropout)
-
     def forward(self, embedded_inputs):
-        # Apply layer normalization and dropout
-        norm_input = self.norm1(self.dropout1(embedded_inputs))
-
-        # Apply self-attention layer
-        attn_output, _ = self.self_attn(norm_input, norm_input, norm_input)
-        attn_output = self.dropout2(attn_output)
+        # self-attention layer
+        embedded_inputs = self.norm_attn(embedded_inputs)
+        attn_output, _ = self.self_attn(embedded_inputs, embedded_inputs, embedded_inputs)
+        attn_output = self.dropout_attn(attn_output)
 
         # add residual skip connection
-        embedded_inputs = embedded_inputs + attn_output
-        embedded_inputs = self.dropout3(embedded_inputs)
-
-        # Apply feedforward network
-        feedforward_output = self.feedforward(embedded_inputs)
+        skip_connection = embedded_inputs + attn_output
+        
+        # feedforward network
+        skip_connection = self.norm_ff(skip_connection)
+        feedforward = self.feedforward(skip_connection)
 
         # add residual skip connection
-        encoded_output = embedded_inputs + feedforward_output
-        encoded_output = self.dropout4(encoded_output)
+        output = skip_connection + feedforward
 
-        return encoded_output
+        return output

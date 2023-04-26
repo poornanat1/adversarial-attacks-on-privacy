@@ -19,19 +19,33 @@ class Summarizer(nn.Module):
         self.num_heads = num_heads
         self.dropout = dropout
 
-        # initialize embed, decoder, and encoder layers
+        # initialize embedding layers
         self.embed_encoder = Embed(self.input_size, self.hidden_size, self.max_length)
         self.embed_decoder = Embed(self.hidden_size, self.hidden_size, self.out_seq_len)
-        self.encoder1 = Encoder(hidden_size=self.hidden_size, num_heads=self.num_heads,
-                                feedforward_size=self.hidden_size * 4, dropout=self.dropout)
-        self.encoder2 = Encoder(hidden_size=self.hidden_size, num_heads=self.num_heads,
-                                feedforward_size=self.hidden_size * 4, dropout=self.dropout)
+
+        # initialize encoder layers
+        self.enc_dropout_input = nn.Dropout(p=self.dropout)
+        self.encoder1 = Encoder(hidden_size=self.hidden_size, 
+                                num_heads=self.num_heads,
+                                feedforward_size=self.hidden_size * 4, 
+                                dropout=self.dropout)
+        self.encoder2 = Encoder(hidden_size=self.hidden_size, 
+                                num_heads=self.num_heads,
+                                feedforward_size=self.hidden_size * 4, 
+                                dropout=self.dropout)
+        self.enc_dropout_output = nn.Dropout(p=self.dropout)
         
         # initialize stack of decoder layers
-        self.dec_dropout_input = nn.Dropout(self.dropout)
-        self.decoder1 = Decoder(self.hidden_size, self.num_heads, self.dropout)
-        self.decoder2 = Decoder(self.hidden_size, self.num_heads, self.dropout)
-        self.dec_dropout_output = nn.Dropout(self.dropout)
+        self.dec_dropout_input = nn.Dropout(p=self.dropout)
+        self.decoder1 = Decoder(hidden_size=self.hidden_size, 
+                                num_heads=self.num_heads, 
+                                feedforward_size=self.hidden_size * 4,
+                                dropout=self.dropout)
+        self.decoder2 = Decoder(hidden_size=self.hidden_size, 
+                                num_heads=self.num_heads, 
+                                feedforward_size=self.hidden_size * 4,
+                                dropout=self.dropout)
+        self.dec_dropout_output = nn.Dropout(p=self.dropout)
 
         # initialize model final linear layer
         self.final_linear = nn.Linear(self.hidden_size, self.output_size)
@@ -79,9 +93,14 @@ class Summarizer(nn.Module):
         return predicted_words
 
     def encoder_layers(self, inputs):
+        # dropout at the input of the entire stack
+        inputs = self.enc_dropout_input(inputs)
+
         encoder1 = self.encoder1(inputs)
         encoder2 = self.encoder2(encoder1)
-        output = encoder2
+
+        # dropout at the output of the entire stack
+        output = self.enc_dropout_output(encoder2)
         return output
 
     def decoder_layers(self, inputs, encoder_outputs, attn_mask):
@@ -99,6 +118,7 @@ class Summarizer(nn.Module):
     def final_layers(self, inputs):
         # linear
         final_linear = self.final_linear(inputs)
+
         # softmax
         softmax = self.softmax(final_linear)
         output = softmax
