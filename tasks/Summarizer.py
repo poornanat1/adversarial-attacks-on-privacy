@@ -21,7 +21,7 @@ class Summarizer(nn.Module):
 
         # initialize embedding layers
         self.embed_encoder = Embed(self.input_size, self.hidden_size, self.max_length)
-        self.embed_decoder = Embed(self.hidden_size, self.hidden_size, self.out_seq_len)
+        self.embed_decoder = Embed(self.output_size, self.hidden_size, self.out_seq_len)
 
         # initialize encoder layers
         self.enc_dropout_input = nn.Dropout(p=self.dropout)
@@ -53,28 +53,29 @@ class Summarizer(nn.Module):
 
     def forward(self, enc_inputs):
         batch_size = enc_inputs.shape[1]  # should be 128
-
         enc_embedding = self.embed_encoder(enc_inputs)
         enc_output = self.encoder_layers(enc_embedding)
 
-        sos_token = enc_inputs[0].unsqueeze(0)  # TODO update this to make this a real SoS token?
+        sos_token = 101
 
         # initial decoder inputs
-        dec_initial_input = sos_token
-        output_len = 0
-        out_seq_len = self.out_seq_len
-        output_size = self.output_size
-        model_outputs = torch.zeros(out_seq_len, batch_size, output_size)
-        dec_inputs = torch.zeros((out_seq_len, batch_size), dtype=torch.int64)
-        dec_inputs[0] = dec_initial_input
-        attn_mask = torch.ones((out_seq_len, out_seq_len), dtype=torch.bool)
+        model_outputs = torch.zeros(self.out_seq_len, batch_size, self.output_size)
+        dec_inputs = torch.zeros((self.out_seq_len, batch_size), dtype=torch.int64)
+        dec_inputs[0] = sos_token
+        
+        attn_mask = torch.logical_not(torch.tril(torch.ones((self.out_seq_len, self.out_seq_len), dtype=torch.bool)))
         attn_mask[0] = False
 
-        while output_len < out_seq_len - 1:  # TODO Also stop when I predict an <EOS> token?
+        output_len = 0
+        while output_len < self.out_seq_len - 1:  
+            # print("dec_inputs.shape: ", dec_inputs.shape)
             dec_embedding = self.embed_decoder(dec_inputs)
             d_out = self.decoder_layers(dec_embedding, enc_output, attn_mask=attn_mask)
             d_out_attention = d_out[0:output_len + 1]
             model_out = self.final_layers(d_out_attention)
+
+            # update attention mask
+            attn_mask[output_len] = False
 
             # increment output length
             output_len += 1
@@ -86,11 +87,9 @@ class Summarizer(nn.Module):
             predictions = torch.argmax(model_out, dim=2)
             dec_inputs[1:output_len + 1] = predictions
 
-            # update attention mask
-            attn_mask[output_len] = False
-
-        predicted_words = torch.argmax(model_outputs, dim=2)
-        return predicted_words
+        # predicted_words = torch.argmax(model_outputs, dim=2)
+        # return predicted_words
+        return model_outputs
 
     def encoder_layers(self, inputs):
         # dropout at the input of the entire stack

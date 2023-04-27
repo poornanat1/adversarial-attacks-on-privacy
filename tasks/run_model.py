@@ -32,13 +32,17 @@ def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu')
         source = data[:,0].transpose(1, 0).to(device)
 
         summary = model(source)
-        summary = summary.reshape(-1, summary.shape[-1])
-        target = data[:,1][:, :summary.shape[0]].transpose(1, 0).to(device)
+        target = data[:, 1][:, :summary.shape[0]].transpose(1, 0).to(device)
+        target = target.reshape(-1)
+        summary_copy = summary.clone().detach().requires_grad_(True)
+        summary_copy = summary_copy.reshape(-1, summary_copy.shape[-1])
+
+        # one-hot encoding of target tensor
+        target_onehot = torch.nn.functional.one_hot(target, num_classes=summary_copy.shape[1]).float()
 
         optimizer.zero_grad()
-        loss = criterion(summary.float().requires_grad_(), target.float())
+        loss = criterion(summary_copy, target_onehot)
         loss.backward()
-
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
         optimizer.step()
 
@@ -62,13 +66,15 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             source = data[:,0].transpose(1, 0).to(device)
             
             summary = model(source)
-            summary = summary.reshape(-1, summary.shape[-1])
-            target = data[:,1][:, :summary.shape[0]].transpose(1, 0).to(device)
+            target = data[:, 1][:, :summary.shape[0]].transpose(1, 0).to(device)
+            target = target.reshape(-1)
+            summary_copy = summary.clone().requires_grad_(True)
+            summary_copy = summary_copy.reshape(-1, summary_copy.shape[-1])
 
-            loss = criterion(summary.float(), target.float())
+            loss = criterion(summary_copy, target)
             total_loss += loss.item()
 
-            # # TODO: the following code needs fixing, ValueError: Mismatch in the number of predictions (59) and references (6492)
+            # TODO: the following code needs fixing, ValueError: Mismatch in the number of predictions (59) and references (6492)
             # tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
             # summary_ids = summary.argmax(dim=-1).squeeze().tolist()
@@ -106,7 +112,7 @@ def main():
     input_size = torch.max(input_data).item() + 1
     hidden_size = 512
     batch_size = 128
-    output_size = 200
+    output_size = input_size
     max_length = input_data.shape[2]
     num_heads = 2
     dropout = 0.2
@@ -118,11 +124,12 @@ def main():
     # Initialize model, model modules, optimizer, and loss function
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Using device:", device)
-    model = Summarizer(input_size, hidden_size, output_size, out_seq_len, device, max_length, num_heads, dropout)
+    model = Summarizer(input_size, hidden_size, output_size, out_seq_len, device, max_length, num_heads, dropout).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     rouge = e.load("rouge")
-    criterion = nn.KLDivLoss(reduction='batchmean')
-    # criterion = nn.CrossEntropyLoss()
+    # criterion = nn.KLDivLoss(reduction='batchmean')
+    criterion = nn.CrossEntropyLoss()
+    # criterion = nn.NLLLoss()
 
     # Define arrays to store metrics for plotting
     train_losses = []
@@ -143,16 +150,16 @@ def main():
         val_loss, avg_val_loss, avg_val_rouge = evaluate(model, val_loader, criterion, rouge, device=device)
 
         # Evaluate on training set
-        train_loss, avg_train_loss, avg_train_rouge = evaluate(model, train_loader, criterion, rouge, device=device)
+        # train_loss, avg_train_loss, avg_train_rouge = evaluate(model, train_loader, criterion, rouge, device=device)
 
         # Print metrics
         print("Training Loss: %.4f. Validation Loss: %.4f. " % (avg_train_loss, avg_val_loss))
-        print("Training ROUGE: %.4f. Validation ROUGE: %.4f. " % (avg_train_rouge, avg_val_rouge))
+        # print("Training ROUGE: %.4f. Validation ROUGE: %.4f. " % (avg_train_rouge, avg_val_rouge))
 
         # Append metrics to arrays for plotting
         train_losses.append(avg_train_loss)
         val_losses.append(avg_val_loss)
-        train_rouge.append(avg_train_rouge)
+        # train_rouge.append(avg_train_rouge)
         val_rouge.append(avg_val_rouge)
 
     end_time = time.time()
@@ -180,7 +187,7 @@ def main():
               'train_loss': train_losses[-1],
               'val_loss': val_losses[-1],
               'test_loss': avg_test_loss,
-              'train_rouge': train_rouge[-1],
+            #   'train_rouge': train_rouge[-1],
               'val_rouge': val_rouge[-1],
               'test_rouge': avg_test_rouge,
               'curve_train_loss': train_losses,
