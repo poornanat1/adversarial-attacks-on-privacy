@@ -18,7 +18,8 @@ import os
 from Summarizer import Summarizer
 from train_utils import dataloader, plot_curves, save_results
 
-def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu'):
+
+def train(model, dataloader, optimizer, criterion, device='cpu'):
     model.train()
 
     # Record total loss
@@ -29,14 +30,23 @@ def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu')
 
     # Mini-batch training
     for batch_idx, data in enumerate(progress_bar):
-        source = data[:,0].transpose(1, 0).to(device)
+        source = data[:, 0].transpose(1, 0).to(device)
 
-        summary = model(source)
-        summary = summary.reshape(-1, summary.shape[-1])
-        target = data[:,1][:, :summary.shape[0]].transpose(1, 0).to(device)
+        output_probs = model(source)
+        output_copy = output_probs.clone().detach().requires_grad_(True)
+
+        target = data[:, 1][:, :output_probs.shape[0]].transpose(1, 0).to(device)
+
+        # one-hot encoding of target tensor #TODO is this correct? Need to validate methodology
+        padding_tokens = [0, 101, 102, 100, 103, 104]
+        target_onehot = torch.ones_like(target).float()
+        for padding_token in padding_tokens:
+            target_onehot[target == padding_token] = 0.0
+        target_onehot.requires_grad = True
 
         optimizer.zero_grad()
-        loss = criterion(summary.float().requires_grad_(), target.float())
+
+        loss = criterion(output_copy, target_onehot)
         loss.backward()
 
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
@@ -51,45 +61,43 @@ def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu')
 def evaluate(model, dataloader, criterion, rouge, device='cpu'):
     # Set the model to eval mode to avoid weights update
     model.eval()
-    total_loss = 0.
     progress_bar = tqdm(dataloader, ascii=True)
 
     with torch.no_grad():
-        total_loss = 0.0
-        total_rouge = 0.0
+        total_loss = 0.
 
         for batch_idx, data in enumerate(progress_bar):
-            source = data[:,0].transpose(1, 0).to(device)
-            
-            summary = model(source)
-            summary = summary.reshape(-1, summary.shape[-1])
-            target = data[:,1][:, :summary.shape[0]].transpose(1, 0).to(device)
+            source = data[:, 0].transpose(1, 0).to(device)
 
-            loss = criterion(summary.float(), target.float())
+            output_probs = model(source)
+            output_copy = output_probs.clone().detach().requires_grad_(True)
+
+            target = data[:, 1][:, :output_probs.shape[0]].transpose(1, 0).to(device)
+
+            # one-hot encoding of target tensor
+            padding_tokens = [0, 101, 102, 100, 103, 104]
+            target_onehot = torch.ones_like(target).float()
+            for padding_token in padding_tokens:
+                target_onehot[target == padding_token] = 0.0
+            target_onehot.requires_grad = True
+
+            loss = criterion(output_copy, target_onehot)
             total_loss += loss.item()
 
-            # # TODO: the following code needs fixing, ValueError: Mismatch in the number of predictions (59) and references (6492)
+            # TODO: compute ROUGE score
             # tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-
-            # summary_ids = summary.argmax(dim=-1).squeeze().tolist()
-            # target_ids = target.squeeze(dim=0).flatten().long().tolist()
-
-            # summary_text = tokenizer.decode(summary_ids, skip_special_tokens=True)
-            # target_text = tokenizer.decode(target_ids, skip_special_tokens=True)
-
-            # # Pad target text to have same length as summary text
+            # summary_text = tokenizer.decode(predictions.tolist(), skip_special_tokens=True)
+            # target_text = tokenizer.decode(target.tolist(), skip_special_tokens=True)
             # pad_amount = len(summary_text) - len(target_text)
             # if pad_amount > 0:
             #     target_text += " " * pad_amount
-
             # rouge_result = rouge.compute(predictions=summary_text, references=target_text)
             # total_rouge += rouge_result['rouge1']
 
             progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
 
     avg_loss = total_loss / len(dataloader)
-    # avg_rouge = total_rouge / len(dataloader) #TODO: uncomment when ROUGE score is fixed
-    avg_rouge = 0 #TODO: remove when ROUGE score is fixed
+    avg_rouge = 0  # TODO: remove when ROUGE score is fixed
     return total_loss, avg_loss, avg_rouge
 
 
@@ -102,7 +110,7 @@ def main():
 
     # Define hyperparameters
     EPOCHS = 2
-    learning_rate = 1e-3
+    learning_rate = 1e-2
     input_size = torch.max(input_data).item() + 1
     hidden_size = 512
     batch_size = 128
@@ -110,7 +118,7 @@ def main():
     max_length = input_data.shape[2]
     num_heads = 2
     dropout = 0.2
-    out_seq_len = 10 
+    out_seq_len = 10
 
     # Define data loaders
     train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size=batch_size)
@@ -121,8 +129,7 @@ def main():
     model = Summarizer(input_size, hidden_size, output_size, out_seq_len, device, max_length, num_heads, dropout)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     rouge = e.load("rouge")
-    criterion = nn.KLDivLoss(reduction='batchmean')
-    # criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss()
 
     # Define arrays to store metrics for plotting
     train_losses = []
@@ -143,16 +150,16 @@ def main():
         val_loss, avg_val_loss, avg_val_rouge = evaluate(model, val_loader, criterion, rouge, device=device)
 
         # Evaluate on training set
-        train_loss, avg_train_loss, avg_train_rouge = evaluate(model, train_loader, criterion, rouge, device=device)
+        # _, _, avg_train_rouge = evaluate(model, train_loader, criterion, rouge, device=device)
 
         # Print metrics
         print("Training Loss: %.4f. Validation Loss: %.4f. " % (avg_train_loss, avg_val_loss))
-        print("Training ROUGE: %.4f. Validation ROUGE: %.4f. " % (avg_train_rouge, avg_val_rouge))
+        # print("Training ROUGE: %.4f. Validation ROUGE: %.4f. " % (avg_train_rouge, avg_val_rouge))
 
         # Append metrics to arrays for plotting
         train_losses.append(avg_train_loss)
         val_losses.append(avg_val_loss)
-        train_rouge.append(avg_train_rouge)
+        # train_rouge.append(avg_train_rouge)
         val_rouge.append(avg_val_rouge)
 
     end_time = time.time()
@@ -171,30 +178,32 @@ def main():
     os.makedirs(path)
     torch.save(model.state_dict(), path + f"{trial_name}.pt")
 
+    # TODO Uncomment when Rouge computation is completed
     # Save hyperparameters and results
-    result = {'epochs': EPOCHS,
-              'learning_rate': learning_rate,
-              'input_size': input_size,
-              'out_seq_len': out_seq_len,
-              'batch_size': batch_size,
-              'train_loss': train_losses[-1],
-              'val_loss': val_losses[-1],
-              'test_loss': avg_test_loss,
-              'train_rouge': train_rouge[-1],
-              'val_rouge': val_rouge[-1],
-              'test_rouge': avg_test_rouge,
-              'curve_train_loss': train_losses,
-              'curve_val_loss': val_losses,
-              'curve_train_rouge': train_rouge,
-              'curve_val_rouge': val_rouge,
-              'elapsed_time_sec': elapsed_time,
-              'device': device
-              }
-    save_results(result, path+'result.csv')
+    # result = {'epochs': EPOCHS,
+    #           'learning_rate': learning_rate,
+    #           'input_size': input_size,
+    #           'out_seq_len': out_seq_len,
+    #           'batch_size': batch_size,
+    #           'train_loss': train_losses[-1],
+    #           'val_loss': val_losses[-1],
+    #           'test_loss': avg_test_loss,
+    #           'train_rouge': train_rouge[-1],
+    #           'val_rouge': val_rouge[-1],
+    #           'test_rouge': avg_test_rouge,
+    #           'curve_train_loss': train_losses,
+    #           'curve_val_loss': val_losses,
+    #           'curve_train_rouge': train_rouge,
+    #           'curve_val_rouge': val_rouge,
+    #           'elapsed_time_sec': elapsed_time,
+    #           'device': device
+    #           }
+    # save_results(result, path + 'result.csv')
 
     # Plot curves
-    plot_curves(train_loss_history=train_losses, train_rouge_history=train_rouge,
-                valid_loss_history=val_losses, valid_rouge_history=val_rouge, path=path)
+    # plot_curves(train_loss_history=train_losses, train_rouge_history=train_rouge,
+    #             valid_loss_history=val_losses, valid_rouge_history=val_rouge, path=path)
+
 
 if __name__ == '__main__':
     main()

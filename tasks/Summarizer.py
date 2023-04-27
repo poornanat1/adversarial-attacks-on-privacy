@@ -67,7 +67,7 @@ class Summarizer(nn.Module):
         model_outputs = torch.zeros(out_seq_len, batch_size, output_size)
         dec_inputs = torch.zeros((out_seq_len, batch_size), dtype=torch.int64)
         dec_inputs[0] = dec_initial_input
-        attn_mask = torch.ones((out_seq_len, out_seq_len), dtype=torch.bool)
+        attn_mask = torch.logical_not(torch.tril(torch.ones((out_seq_len, out_seq_len), dtype=torch.bool)))
         attn_mask[0] = False
 
         while output_len < out_seq_len - 1:  # TODO Also stop when I predict an <EOS> token?
@@ -89,8 +89,10 @@ class Summarizer(nn.Module):
             # update attention mask
             attn_mask[output_len] = False
 
-        predicted_words = torch.argmax(model_outputs, dim=2)
-        return predicted_words
+        # predicted_words = torch.argmax(model_outputs, dim=2)
+        highest_probabilities, _ = torch.max(model_outputs, dim=2)
+        highest_probabilities = highest_probabilities.clone().detach().requires_grad_(True)
+        return highest_probabilities
 
     def encoder_layers(self, inputs):
         # dropout at the input of the entire stack

@@ -165,8 +165,8 @@ def tokenize_data(file_path):
             tokenized_target_data.append(encoded_target['input_ids'])
             
             # Can uncomment to create a smaller dataset for testing
-            # if row_num > 512:
-            #     break
+            if row_num > 512:
+                break
 
     return tokenized_input_data, attention_masks, tokenized_target_data, tokenizer
 
