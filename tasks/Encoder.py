@@ -41,17 +41,17 @@ class Encoder(nn.Module):
         self.dropout=dropout
 
         # Define self-attention layer
-        self.norm_attn = T5LayerNorm(hidden_size)
-        self.self_attn = nn.MultiheadAttention(hidden_size, num_heads, dropout=self.dropout)
+        self.norm_attn = T5LayerNorm(self.hidden_size)
+        self.self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
         self.dropout_attn = nn.Dropout(p=self.dropout)
 
         # Define feedforward network
-        self.norm_ff = T5LayerNorm(hidden_size)
+        self.norm_ff = T5LayerNorm(self.hidden_size)
         self.feedforward = nn.Sequential(
-            nn.Linear(hidden_size, feedforward_size),
+            nn.Linear(self.hidden_size, self.feedforward_size),
             nn.ReLU(),
             nn.Dropout(p=self.dropout),
-            nn.Linear(feedforward_size, hidden_size),
+            nn.Linear(self.feedforward_size, self.hidden_size),
             nn.Dropout(p=self.dropout)
         )
 

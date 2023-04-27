@@ -24,21 +24,22 @@ class Decoder(nn.Module):
 
         # Self-attention subcomponent
         self.norm_self_attn = T5LayerNorm(self.hidden_size)
-        self.masked_self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, add_bias_kv=False, dropout=self.dropout)
+        self.masked_self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
         self.dropout_self_attn = nn.Dropout(p=self.dropout)
         
         # Encoder-decoder attention subcomponent
         self.norm_enc_dec_attn = T5LayerNorm(self.hidden_size)
-        self.encoder_decoder_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, add_bias_kv=False, dropout=self.dropout)
+        self.norm_enc_dec_attn2 = T5LayerNorm(self.hidden_size)
+        self.encoder_decoder_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
         self.dropout_enc_dec_attn = nn.Dropout(p=self.dropout)
 
         # Feedforward network: Two linear transformations with a ReLU activation in between (Vaswani, 2017)
         self.feedforward = nn.Sequential(
             T5LayerNorm(self.hidden_size), 
-            nn.Linear(self.hidden_size, self.feedforward_size, bias=False),
+            nn.Linear(self.hidden_size, self.feedforward_size),
             nn.ReLU(),
             nn.Dropout(p=self.dropout),
-            nn.Linear(self.feedforward_size, self.hidden_size, bias=False),
+            nn.Linear(self.feedforward_size, self.hidden_size),
             nn.Dropout(p=self.dropout)
             )
 
@@ -54,6 +55,7 @@ class Decoder(nn.Module):
         # encoder-decoder multihead attention
         # In "encoder-decoder attention" layers, the queries come from the previous decoder layer, and the memory keys and values come from the output of the encoder. (Vaswani, 2017)
         skip_connection1 = self.norm_enc_dec_attn(skip_connection1)
+        enc_output = self.norm_enc_dec_attn2(enc_output)
         encoder_decoder_attn, _ = self.encoder_decoder_attn(skip_connection1, enc_output, enc_output)
         encoder_decoder_attn = self.dropout_enc_dec_attn(encoder_decoder_attn)
 
