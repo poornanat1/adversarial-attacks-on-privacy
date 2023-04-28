@@ -29,23 +29,16 @@ def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu')
 
     # Mini-batch training
     for batch_idx, data in enumerate(progress_bar):
-        source = data[:,0].transpose(1, 0).to(device)
-
+        source = data[:, 0].transpose(1, 0).to(device)
         summary = model(source)
         target = data[:, 1][:, :summary.shape[0]].transpose(1, 0).to(device)
-        target = target.reshape(-1)
-        summary_copy = summary.clone().detach().requires_grad_(True)
-        summary_copy = summary_copy.reshape(-1, summary_copy.shape[-1])
-
-        # one-hot encoding of target tensor
-        target_onehot = torch.nn.functional.one_hot(target, num_classes=summary_copy.shape[1]).float()
-
+        target_labels = target.reshape(-1)
+        summary_reshaped = summary.reshape(-1, summary.shape[-1])
         optimizer.zero_grad()
-        loss = criterion(summary_copy, target_onehot)
+        loss = criterion(summary_reshaped, target_labels)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
         optimizer.step()
-
         total_loss += loss.item()
         progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
 
@@ -67,11 +60,10 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             
             summary = model(source)
             target = data[:, 1][:, :summary.shape[0]].transpose(1, 0).to(device)
-            target = target.reshape(-1)
-            summary_copy = summary.clone().requires_grad_(True)
-            summary_copy = summary_copy.reshape(-1, summary_copy.shape[-1])
+            target_labels = target.reshape(-1)
+            summary_reshaped = summary.reshape(-1, summary.shape[-1])
 
-            loss = criterion(summary_copy, target)
+            loss = criterion(summary_reshaped, target_labels)
             total_loss += loss.item()
 
             # TODO: the following code needs fixing, ValueError: Mismatch in the number of predictions (59) and references (6492)
@@ -107,7 +99,7 @@ def main():
     train_data, val_data, test_data = random_split(data, [0.8, 0.1, 0.1])
 
     # Define hyperparameters
-    EPOCHS = 2
+    EPOCHS = 4
     learning_rate = 1e-3
     input_size = torch.max(input_data).item() + 1
     hidden_size = 512
@@ -115,7 +107,7 @@ def main():
     output_size = input_size
     max_length = input_data.shape[2]
     num_heads = 2
-    dropout = 0.2
+    dropout = 0.3
     out_seq_len = 10 
 
     # Define data loaders
