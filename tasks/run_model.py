@@ -111,7 +111,6 @@ def main():
     max_length = input_data.shape[2]
     num_heads = 2
     dropout = 0.1
-    out_seq_len = 10 
     pad_token_id = 0
 
     # Define data loaders
@@ -120,7 +119,7 @@ def main():
     # Initialize model, model modules, optimizer, and loss function
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Using device:", device)
-    model = Summarizer(input_size, hidden_size, output_size, out_seq_len, device, max_length, num_heads, dropout).to(device)
+    model = Summarizer(input_size, hidden_size, output_size, device, max_length, num_heads, dropout).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     rouge = e.load("rouge")
     # criterion = nn.KLDivLoss(reduction='batchmean')
@@ -146,16 +145,17 @@ def main():
         val_loss, avg_val_loss, avg_val_rouge = evaluate(model, val_loader, criterion, rouge, device=device)
 
         # Evaluate on training set
+        avg_train_rouge = 0
         # train_loss, avg_train_loss, avg_train_rouge = evaluate(model, train_loader, criterion, rouge, device=device)
 
         # Print metrics
         print("Training Loss: %.4f. Validation Loss: %.4f. " % (avg_train_loss, avg_val_loss))
-        # print("Training ROUGE: %.4f. Validation ROUGE: %.4f. " % (avg_train_rouge, avg_val_rouge))
+        print("Training ROUGE: %.4f. Validation ROUGE: %.4f. " % (avg_train_rouge, avg_val_rouge))
 
         # Append metrics to arrays for plotting
         train_losses.append(avg_train_loss)
         val_losses.append(avg_val_loss)
-        # train_rouge.append(avg_train_rouge)
+        train_rouge.append(avg_train_rouge)
         val_rouge.append(avg_val_rouge)
 
     end_time = time.time()
@@ -172,18 +172,22 @@ def main():
     trial_name = f"trial_{timestamp}_lr_{learning_rate}_bs_{batch_size}"
     path = f"../results/{trial_name}/"
     os.makedirs(path)
-    torch.save(model.state_dict(), path + f"{trial_name}.pt")
+    torch.save(model.state_dict(), path + f"model_state_dict.pt")
 
     # Save hyperparameters and results
     result = {'epochs': EPOCHS,
               'learning_rate': learning_rate,
               'input_size': input_size,
-              'out_seq_len': out_seq_len,
+              'hidden_size': hidden_size,
               'batch_size': batch_size,
+              'output_size': output_size,
+              'max_length': max_length,
+              'num_heads': num_heads,
+              'dropout': dropout,
               'train_loss': train_losses[-1],
               'val_loss': val_losses[-1],
               'test_loss': avg_test_loss,
-            #   'train_rouge': train_rouge[-1],
+              'train_rouge': train_rouge[-1],
               'val_rouge': val_rouge[-1],
               'test_rouge': avg_test_rouge,
               'curve_train_loss': train_losses,

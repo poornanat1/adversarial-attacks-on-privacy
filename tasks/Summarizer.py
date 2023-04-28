@@ -6,14 +6,13 @@ from Decoder import Decoder
 
 
 class Summarizer(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, out_seq_len, device, max_length, num_heads, dropout):
+    def __init__(self, input_size, hidden_size, output_size, device, max_length, num_heads, dropout):
         super(Summarizer, self).__init__()
 
         # initialize model parameters
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
-        self.out_seq_len = out_seq_len
         self.device = device
         self.max_length = max_length
         self.num_heads = num_heads
@@ -49,10 +48,9 @@ class Summarizer(nn.Module):
 
         # initialize model final linear layer
         self.final_linear = nn.Linear(self.hidden_size, self.output_size)
-        # self.softmax = nn.Softmax(dim=2)
 
     def forward(self, enc_inputs):
-        batch_size = enc_inputs.shape[1]  # should be 128
+        batch_size = enc_inputs.shape[1]
         enc_embedding = self.embed_encoder(enc_inputs)
         enc_output = self.encoder_layers(enc_embedding)
 
@@ -65,7 +63,9 @@ class Summarizer(nn.Module):
         dec_inputs[0] = sos_token
         
         attn_mask = torch.logical_not(torch.tril(torch.ones((self.max_length, self.max_length), dtype=torch.bool)))
-        ended_sequences = set()
+
+        # ended_sequences = set()
+        
         for i in range(self.max_length):  
             # update attention mask
             attn_mask[i] = False
@@ -94,8 +94,6 @@ class Summarizer(nn.Module):
             #         # Trim the output sequence for the ended sequence
             #         dec_inputs[j,] = dec_inputs[j,:i+1]
 
-        # predicted_words = torch.argmax(model_outputs, dim=2)
-        # return predicted_words
         return model_outputs
 
     def encoder_layers(self, inputs):
@@ -124,9 +122,4 @@ class Summarizer(nn.Module):
     def final_layers(self, inputs):
         # linear
         final_linear = self.final_linear(inputs)
-
-        # softmax
-        # softmax = self.softmax(final_linear)
-        # output = softmax
-        output = final_linear
-        return output
+        return final_linear
