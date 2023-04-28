@@ -21,7 +21,7 @@ class Summarizer(nn.Module):
 
         # initialize embedding layers
         self.embed_encoder = Embed(self.input_size, self.hidden_size, self.max_length)
-        self.embed_decoder = Embed(self.output_size, self.hidden_size, self.out_seq_len)
+        self.embed_decoder = Embed(self.output_size, self.hidden_size, self.max_length)
 
         # initialize encoder layers
         self.enc_dropout_input = nn.Dropout(p=self.dropout)
@@ -49,7 +49,7 @@ class Summarizer(nn.Module):
 
         # initialize model final linear layer
         self.final_linear = nn.Linear(self.hidden_size, self.output_size)
-        self.softmax = nn.Softmax(dim=2)
+        # self.softmax = nn.Softmax(dim=2)
 
     def forward(self, enc_inputs):
         batch_size = enc_inputs.shape[1]  # should be 128
@@ -57,35 +57,42 @@ class Summarizer(nn.Module):
         enc_output = self.encoder_layers(enc_embedding)
 
         sos_token = 101
+        eos_token = 102
 
         # initial decoder inputs
-        model_outputs = torch.zeros(self.out_seq_len, batch_size, self.output_size)
-        dec_inputs = torch.zeros((self.out_seq_len, batch_size), dtype=torch.int64)
+        model_outputs = torch.zeros(self.max_length, batch_size, self.output_size)
+        dec_inputs = torch.zeros((self.max_length, batch_size), dtype=torch.int64)
         dec_inputs[0] = sos_token
         
-        attn_mask = torch.logical_not(torch.tril(torch.ones((self.out_seq_len, self.out_seq_len), dtype=torch.bool)))
-        attn_mask[0] = False
+        attn_mask = torch.logical_not(torch.tril(torch.ones((self.max_length, self.max_length), dtype=torch.bool)))
+        ended_sequences = set()
+        for i in range(self.max_length):  
+            # update attention mask
+            attn_mask[i] = False
 
-        output_len = 0
-        while output_len < self.out_seq_len - 1:  
-            # print("dec_inputs.shape: ", dec_inputs.shape)
             dec_embedding = self.embed_decoder(dec_inputs)
             d_out = self.decoder_layers(dec_embedding, enc_output, attn_mask=attn_mask)
-            d_out_attention = d_out[0:output_len + 1]
+            d_out_attention = d_out[1:i+1]
             model_out = self.final_layers(d_out_attention)
 
-            # update attention mask
-            attn_mask[output_len] = False
-
-            # increment output length
-            output_len += 1
-
             # add predictions for this position to model_outputs
-            model_outputs[1:output_len + 1] = model_out
+            model_outputs[1:i+1] = model_out
 
             # update dec_inputs
             predictions = torch.argmax(model_out, dim=2)
-            dec_inputs[1:output_len + 1] = predictions
+            dec_inputs[1:i+1] = predictions
+
+            # # If any predicted token is the EOS token, stop generating output for that sequence
+            # if eos_token in predictions:
+            #     break_indices = torch.where(predictions == eos_token)[0]
+            #     for j in break_indices:
+            #         # If the sequence has already ended, skip it
+            #         if j in ended_sequences:
+            #             continue
+            #         # Mark the sequence as ended
+            #         ended_sequences.add(j)
+            #         # Trim the output sequence for the ended sequence
+            #         dec_inputs[j,] = dec_inputs[j,:i+1]
 
         # predicted_words = torch.argmax(model_outputs, dim=2)
         # return predicted_words
@@ -119,6 +126,7 @@ class Summarizer(nn.Module):
         final_linear = self.final_linear(inputs)
 
         # softmax
-        softmax = self.softmax(final_linear)
-        output = softmax
+        # softmax = self.softmax(final_linear)
+        # output = softmax
+        output = final_linear
         return output
