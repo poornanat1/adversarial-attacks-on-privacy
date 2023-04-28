@@ -69,29 +69,27 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             loss = criterion(summary, target)
             total_loss += loss.item()
 
-            # TODO: the following code needs fixing, ValueError: Mismatch in the number of predictions (59) and references (6492)
-            # tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+            tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
-            # decoded_summaries = []
-            # decoded_targets = []
+            decoded_summaries = []
+            decoded_targets = []
 
-            # summaries = summary.argmax(dim=-1).squeeze().transpose(0,1).tolist()
-            # targets = target.squeeze(dim=0).transpose(0,1).tolist()
-            # for i in range(len(summaries)): 
-            #     summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
-            #     target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
+            summaries = summary.argmax(dim=-1).squeeze().transpose(0,1).tolist()
+            targets = target.squeeze(dim=0).transpose(0,1).tolist()
+            for i in range(len(summaries)): 
+                summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
+                target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
 
-            #     decoded_summaries.append(summary_text)
-            #     decoded_targets.append(target_text)
+                decoded_summaries.append(summary_text)
+                decoded_targets.append(target_text)
 
-            # rouge_result = rouge.compute(predictions=summary_text, references=target_text)
-            # total_rouge += rouge_result['rouge1']
+            rouge_result = rouge.compute(predictions=decoded_summaries, references=decoded_targets)
+            total_rouge += rouge_result['rouge1']
 
             progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
 
     avg_loss = total_loss / len(dataloader)
-    # avg_rouge = total_rouge / len(dataloader) #TODO: uncomment when ROUGE score is fixed
-    avg_rouge = 0 #TODO: remove when ROUGE score is fixed
+    avg_rouge = total_rouge / len(dataloader) #TODO: uncomment when ROUGE score is fixed
     return total_loss, avg_loss, avg_rouge
 
 
@@ -146,8 +144,8 @@ def main():
         val_loss, avg_val_loss, avg_val_rouge = evaluate(model, val_loader, criterion, rouge, device=device)
 
         # Evaluate on training set
-        avg_train_rouge = 0
-        # train_loss, avg_train_loss, avg_train_rouge = evaluate(model, train_loader, criterion, rouge, device=device)
+        # avg_train_rouge = 0
+        _, _, avg_train_rouge = evaluate(model, train_loader, criterion, rouge, device=device)
 
         # Print metrics
         print("Training Loss: %.4f. Validation Loss: %.4f. " % (avg_train_loss, avg_val_loss))
