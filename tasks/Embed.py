@@ -18,7 +18,7 @@ class Embed(nn.Module):
         self.posembedding = nn.Embedding(self.max_length, self.hidden_size)
 
     def forward(self, inputs):
-        token_embedding = self.embedding(inputs)
+        token_embedding = self.embedding(inputs.clone())
         token_embedding = torch.transpose(token_embedding, 0, 1)
         position = torch.arange(self.max_length)  # .unsqueeze(1)
         pos_embedding = self.posembedding(position)
