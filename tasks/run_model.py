@@ -72,16 +72,17 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             # TODO: the following code needs fixing, ValueError: Mismatch in the number of predictions (59) and references (6492)
             # tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
-            # summary_ids = summary.argmax(dim=-1).squeeze().tolist()
-            # target_ids = target.squeeze(dim=0).flatten().long().tolist()
+            # decoded_summaries = []
+            # decoded_targets = []
 
-            # summary_text = tokenizer.decode(summary_ids, skip_special_tokens=True)
-            # target_text = tokenizer.decode(target_ids, skip_special_tokens=True)
+            # summaries = summary.argmax(dim=-1).squeeze().transpose(0,1).tolist()
+            # targets = target.squeeze(dim=0).transpose(0,1).tolist()
+            # for i in range(len(summaries)): 
+            #     summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
+            #     target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
 
-            # # Pad target text to have same length as summary text
-            # pad_amount = len(summary_text) - len(target_text)
-            # if pad_amount > 0:
-            #     target_text += " " * pad_amount
+            #     decoded_summaries.append(summary_text)
+            #     decoded_targets.append(target_text)
 
             # rouge_result = rouge.compute(predictions=summary_text, references=target_text)
             # total_rouge += rouge_result['rouge1']
