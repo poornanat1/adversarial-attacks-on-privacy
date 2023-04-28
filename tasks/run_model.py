@@ -30,18 +30,14 @@ def train(model, dataloader, optimizer, criterion, scheduler=None, device='cpu')
     # Mini-batch training
     for batch_idx, data in enumerate(progress_bar):
         source = data[:,0].transpose(1, 0).to(device)
+        target = data[:,1].transpose(1, 0).to(device)
 
         summary = model(source)
-        target = data[:, 1][:, :summary.shape[0]].transpose(1, 0).to(device)
+        summary = summary.reshape(-1, summary.shape[-1])
         target = target.reshape(-1)
-        summary_copy = summary.clone().detach().requires_grad_(True)
-        summary_copy = summary_copy.reshape(-1, summary_copy.shape[-1])
-
-        # one-hot encoding of target tensor
-        target_onehot = torch.nn.functional.one_hot(target, num_classes=summary_copy.shape[1]).float()
 
         optimizer.zero_grad()
-        loss = criterion(summary_copy, target_onehot)
+        loss = criterion(summary, target)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
         optimizer.step()
@@ -64,14 +60,13 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
 
         for batch_idx, data in enumerate(progress_bar):
             source = data[:,0].transpose(1, 0).to(device)
+            target = data[:,1].transpose(1, 0).to(device)
             
             summary = model(source)
-            target = data[:, 1][:, :summary.shape[0]].transpose(1, 0).to(device)
+            summary = summary.reshape(-1, summary.shape[-1])
             target = target.reshape(-1)
-            summary_copy = summary.clone().requires_grad_(True)
-            summary_copy = summary_copy.reshape(-1, summary_copy.shape[-1])
 
-            loss = criterion(summary_copy, target)
+            loss = criterion(summary, target)
             total_loss += loss.item()
 
             # TODO: the following code needs fixing, ValueError: Mismatch in the number of predictions (59) and references (6492)
@@ -107,7 +102,7 @@ def main():
     train_data, val_data, test_data = random_split(data, [0.8, 0.1, 0.1])
 
     # Define hyperparameters
-    EPOCHS = 2
+    EPOCHS = 5
     learning_rate = 1e-3
     input_size = torch.max(input_data).item() + 1
     hidden_size = 512
@@ -115,8 +110,9 @@ def main():
     output_size = input_size
     max_length = input_data.shape[2]
     num_heads = 2
-    dropout = 0.2
+    dropout = 0.1
     out_seq_len = 10 
+    pad_token_id = 0
 
     # Define data loaders
     train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size=batch_size)
@@ -128,7 +124,7 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     rouge = e.load("rouge")
     # criterion = nn.KLDivLoss(reduction='batchmean')
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=pad_token_id)
     # criterion = nn.NLLLoss()
 
     # Define arrays to store metrics for plotting
