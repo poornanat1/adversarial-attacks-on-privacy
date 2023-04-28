@@ -60,11 +60,11 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
 
         for batch_idx, data in enumerate(progress_bar):
             source = data[:,0].transpose(1, 0).to(device)
-            target = data[:,1].transpose(1, 0).to(device)
+            target_orig = data[:,1].transpose(1, 0).to(device)
             
-            summary = model(source)
-            summary = summary.reshape(-1, summary.shape[-1])
-            target = target.reshape(-1)
+            summary_orig = model(source)
+            summary = summary_orig.reshape(-1, summary_orig.shape[-1])
+            target = target_orig.reshape(-1)
 
             loss = criterion(summary, target)
             total_loss += loss.item()
@@ -74,8 +74,8 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             decoded_summaries = []
             decoded_targets = []
 
-            summaries = summary.argmax(dim=-1).squeeze().transpose(0,1).tolist()
-            targets = target.squeeze(dim=0).transpose(0,1).tolist()
+            summaries = summary_orig.argmax(dim=-1).squeeze().transpose(0,1).tolist()
+            targets = target_orig.squeeze(dim=0).transpose(0,1).tolist()
             for i in range(len(summaries)): 
                 summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
                 target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
@@ -89,7 +89,7 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
 
     avg_loss = total_loss / len(dataloader)
-    avg_rouge = total_rouge / len(dataloader) #TODO: uncomment when ROUGE score is fixed
+    avg_rouge = total_rouge / len(dataloader)
     return total_loss, avg_loss, avg_rouge
 
 
@@ -101,7 +101,7 @@ def main():
     train_data, val_data, test_data = random_split(data, [0.8, 0.1, 0.1])
 
     # Define hyperparameters
-    EPOCHS = 5
+    EPOCHS = 10
     learning_rate = 1e-3
     input_size = torch.max(input_data).item() + 1
     hidden_size = 512
