@@ -21,3 +21,4 @@ dependencies:
       - nltk==3.8.1
       - Faker==18.4.0
       - evaluate
+      - ipykernel
