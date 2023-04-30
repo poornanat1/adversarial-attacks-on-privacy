@@ -120,7 +120,7 @@ def main():
     train_data, val_data, test_data = random_split(data, [0.8, 0.1, 0.1])
 
     # Define hyperparameters
-    EPOCHS = 1
+    EPOCHS = 3
     learning_rate = 1e-3
     input_size = torch.max(input_data).item() + 1
     hidden_size = 512
@@ -159,7 +159,7 @@ def main():
             data_loader=train_loader,
             noise_multiplier=noise_multiplier,
             max_grad_norm=max_grad_norm,
-            # grad_sample_mode="functorch"
+            grad_sample_mode="functorch"
         )
 
         # Define array to store epsilon history

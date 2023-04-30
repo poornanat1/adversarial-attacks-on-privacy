@@ -143,7 +143,7 @@ def tokenize_data(file_path):
             encoded_input = tokenizer.encode_plus(
                                 text=input,
                                 add_special_tokens = True,           # Add '[CLS]' and '[SEP]'
-                                max_length = 512,                   # Pad & truncate all sequences
+                                max_length = 32,                   # Pad & truncate all sequences
                                 padding = 'max_length',
                                 truncation = True,
                                 return_attention_mask = True,        # Construct attention masks
@@ -152,7 +152,7 @@ def tokenize_data(file_path):
             encoded_target = tokenizer.encode_plus(
                                 text=target,
                                 add_special_tokens = True,           # Add '[CLS]' and '[SEP]'
-                                max_length = 512,                   # Pad & truncate all sequences
+                                max_length = 32,                   # Pad & truncate all sequences
                                 padding = 'max_length',
                                 truncation = True,
                                 return_attention_mask = False,        # Construct attention masks
