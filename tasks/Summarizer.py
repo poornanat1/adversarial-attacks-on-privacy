@@ -6,7 +6,7 @@ from Decoder import Decoder
 
 
 class Summarizer(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, device, max_length, num_heads, dropout):
+    def __init__(self, input_size, hidden_size, output_size, device, max_length, num_heads, dropout, model_type="base"):
         super(Summarizer, self).__init__()
 
         # initialize model parameters
@@ -17,6 +17,7 @@ class Summarizer(nn.Module):
         self.max_length = max_length
         self.num_heads = num_heads
         self.dropout = dropout
+        self.dpsgd = True if model_type=="dp-sgd" else False
 
         # initialize embedding layers
         self.embed_encoder = Embed(self.input_size, self.hidden_size, self.max_length)
@@ -27,11 +28,13 @@ class Summarizer(nn.Module):
         self.encoder1 = Encoder(hidden_size=self.hidden_size, 
                                 num_heads=self.num_heads,
                                 feedforward_size=self.hidden_size * 4, 
-                                dropout=self.dropout)
+                                dropout=self.dropout,
+                                dpsgd=self.dpsgd)
         self.encoder2 = Encoder(hidden_size=self.hidden_size, 
                                 num_heads=self.num_heads,
                                 feedforward_size=self.hidden_size * 4, 
-                                dropout=self.dropout)
+                                dropout=self.dropout,
+                                dpsgd=self.dpsgd)
         self.enc_dropout_output = nn.Dropout(p=self.dropout)
         
         # initialize stack of decoder layers
@@ -39,11 +42,13 @@ class Summarizer(nn.Module):
         self.decoder1 = Decoder(hidden_size=self.hidden_size, 
                                 num_heads=self.num_heads, 
                                 feedforward_size=self.hidden_size * 4,
-                                dropout=self.dropout)
+                                dropout=self.dropout,
+                                dpsgd=self.dpsgd)
         self.decoder2 = Decoder(hidden_size=self.hidden_size, 
                                 num_heads=self.num_heads, 
                                 feedforward_size=self.hidden_size * 4,
-                                dropout=self.dropout)
+                                dropout=self.dropout,
+                                dpsgd=self.dpsgd)
         self.dec_dropout_output = nn.Dropout(p=self.dropout)
 
         # initialize model final linear layer

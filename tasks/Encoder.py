@@ -1,8 +1,12 @@
+# Ref: T5LayerNorm function from https://github.com/huggingface/transformers/blob/d95045717e1a5bd8ce71223b5b8920e27687dee4/src/transformers/models/t5/modeling_t5.py#L238
+# Ref: https://opacus.ai/api/dp_multihead_attention.html
+
 import torch
 import torch.nn as nn
 
-# T5LayerNorm function from: https://github.com/huggingface/transformers/blob/d95045717e1a5bd8ce71223b5b8920e27687dee4/src/transformers/models/t5/modeling_t5.py#L238
-# Please leave citation in because this function is taken directly from T5 source code.
+from opacus.layers.dp_multihead_attention import DPMultiheadAttention
+
+
 class T5LayerNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
         """
@@ -32,7 +36,7 @@ class Encoder(nn.Module):
         subcomponents input to its output. Dropout (Srivastava et al., 2014) is applied within the feed-forward network, 
         on the skip connection, on the attention weights, and at the input and output of the entire stack.
     '''
-    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1):
+    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1, dpsgd=False):
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -42,7 +46,10 @@ class Encoder(nn.Module):
 
         # Define self-attention layer
         self.norm_attn = T5LayerNorm(self.hidden_size)
-        self.self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        if dpsgd:
+            self.self_attn =DPMultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        else:
+            self.self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
         self.dropout_attn = nn.Dropout(p=self.dropout)
 
         # Define feedforward network

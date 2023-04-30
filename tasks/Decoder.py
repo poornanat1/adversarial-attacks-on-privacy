@@ -1,8 +1,11 @@
 # Ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/t5/modeling_t5.py
+# Ref: https://opacus.ai/api/dp_multihead_attention.html
 
 import torch
 import torch.nn as nn
 from Encoder import T5LayerNorm
+
+from opacus.layers.dp_multihead_attention import DPMultiheadAttention
 
 
 class Decoder(nn.Module):
@@ -13,7 +16,7 @@ class Decoder(nn.Module):
         attend to past outputs. 
     """
 
-    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1):
+    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1, dpsgd=False):
         super(Decoder, self).__init__()
 
         # initialize model parameters
@@ -24,13 +27,19 @@ class Decoder(nn.Module):
 
         # Self-attention subcomponent
         self.norm_self_attn = T5LayerNorm(self.hidden_size)
-        self.masked_self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        if dpsgd:
+            self.masked_self_attn = DPMultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        else:
+            self.masked_self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
         self.dropout_self_attn = nn.Dropout(p=self.dropout)
         
         # Encoder-decoder attention subcomponent
         self.norm_enc_dec_attn = T5LayerNorm(self.hidden_size)
         self.norm_enc_dec_attn2 = T5LayerNorm(self.hidden_size)
-        self.encoder_decoder_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        if dpsgd:
+            self.encoder_decoder_attn = DPMultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        else:
+            self.encoder_decoder_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
         self.dropout_enc_dec_attn = nn.Dropout(p=self.dropout)
 
         # Feedforward network: Two linear transformations with a ReLU activation in between (Vaswani, 2017)
