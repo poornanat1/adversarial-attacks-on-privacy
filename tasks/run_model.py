@@ -1,15 +1,24 @@
-# Run this file while in the "tasks" directory using: python run_model.py
-# If you don't have the "evaluate" package for rouge_score in your environment, run: conda env update --file environment.yaml --prune
-# source: https://stackoverflow.com/questions/42352841/how-to-update-an-existing-conda-environment-with-a-yml-file
-# Sources: We used code from assignment 4 as an outline
+# Ref: https://stackoverflow.com/questions/42352841/how-to-update-an-existing-conda-environment-with-a-yml-file
+# Ref: We used code from assignment 4 as an outline
+# Ref: https://github.com/pytorch/opacus/blob/main/examples/mnist.py
 
+# To update conda environment: conda env update --file environment.yaml --prune
+
+# Run this file while in the "tasks" directory using: python run_model.py
+# To run a specific model_type, execute any of the following:
+# 1) python run_model.py dp-sgd
+# 2) python run_model.py base
+# 3) python run_model.py (will run base by default)
+
+import sys
 import torch
 import torch.optim as optim
 import torch.nn as nn
-import evaluate as e  # import ROUGE metric #reference: https://huggingface.co/course/chapter7/5?fw=tf#metrics-for-text-summarization
+import evaluate as e  
 from tqdm import tqdm  # Tqdm progress bar
 from torch.utils.data import random_split
 from transformers import AutoTokenizer
+from opacus import PrivacyEngine
 
 import datetime
 import time
@@ -94,6 +103,16 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
 
 
 def main():
+    # Run code based on specified model_type from terminal: base (default), dp-sgd
+    if len(sys.argv) > 1:
+        model_type = sys.argv[1]
+        if model_type!="base" and model_type!="dp-sgd":
+            print("Invalid model_type. Must be one of base or dp-sgd, or leave blank for base.\nExiting program.")
+            sys.exit()
+    else:
+        model_type = "base"
+    print(f"Running training for {model_type}!")
+
     # Load preprocessed training data
     input_data = torch.load('../data/processed/tokenized_input_data.pt')
     target_data = torch.load('../data/processed/tokenized_target_data.pt')
@@ -101,7 +120,7 @@ def main():
     train_data, val_data, test_data = random_split(data, [0.8, 0.1, 0.1])
 
     # Define hyperparameters
-    EPOCHS = 10
+    EPOCHS = 1
     learning_rate = 1e-3
     input_size = torch.max(input_data).item() + 1
     hidden_size = 512
@@ -112,25 +131,46 @@ def main():
     dropout = 0.1
     pad_token_id = 0
 
+    # Set device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print("Using device:", device)
+
     # Define data loaders
     train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size=batch_size)
 
     # Initialize model, model modules, optimizer, and loss function
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print("Using device:", device)
-    model = Summarizer(input_size, hidden_size, output_size, device, max_length, num_heads, dropout).to(device)
+    model = Summarizer(input_size, hidden_size, output_size, device, max_length, num_heads, dropout, model_type).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    rouge = e.load("rouge")
-    # criterion = nn.KLDivLoss(reduction='batchmean')
     criterion = nn.CrossEntropyLoss(ignore_index=pad_token_id)
-    # criterion = nn.NLLLoss()
+    rouge = e.load("rouge")
+
+    # Attach privacy engine to optimizer if running dp-sgd model
+    if model_type=="dp-sgd":
+        # Define DP-SGD specific hyperparameters
+        noise_multiplier = 1.1 
+        max_grad_norm = 1.0
+        delta = 1e-5
+
+        # Instantiate PrivacyEngine() and wrap optimizer
+        privacy_engine = PrivacyEngine()
+        model, optimizer, train_loader = privacy_engine.make_private(
+            module=model,
+            optimizer=optimizer,
+            data_loader=train_loader,
+            noise_multiplier=noise_multiplier,
+            max_grad_norm=max_grad_norm,
+            # grad_sample_mode="functorch"
+        )
+
+        # Define array to store epsilon history
+        epsilon_history = []
 
     # Define arrays to store metrics for plotting
     train_losses = []
     val_losses = []
     train_rouge = []
     val_rouge = []
-
+    
     start_time = time.time()
     for epoch in range(EPOCHS):
         print("-----------------------------------")
@@ -144,12 +184,16 @@ def main():
         val_loss, avg_val_loss, avg_val_rouge = evaluate(model, val_loader, criterion, rouge, device=device)
 
         # Evaluate on training set
-        # avg_train_rouge = 0
         _, _, avg_train_rouge = evaluate(model, train_loader, criterion, rouge, device=device)
 
         # Print metrics
         print("Training Loss: %.4f. Validation Loss: %.4f. " % (avg_train_loss, avg_val_loss))
         print("Training ROUGE: %.4f. Validation ROUGE: %.4f. " % (avg_train_rouge, avg_val_rouge))
+
+        if model_type=="dp-sgd":
+            epsilon = privacy_engine.accountant.get_epsilon(delta=delta)
+            print(f"Privacy spent: (ε = {epsilon:.2f}, δ = {delta})")
+            epsilon_history.append(epsilon)
 
         # Append metrics to arrays for plotting
         train_losses.append(avg_train_loss)
@@ -197,6 +241,15 @@ def main():
               'device': device
               }
     save_results(result, path+'result.csv')
+
+    # Save DP-SGD specific results
+    if model_type=="dp-sgd":
+        result_dp = {'noise_multiplier': noise_multiplier,
+                     'max_grad_norm': max_grad_norm,
+                     'delta': delta,
+                     'epsilon_history': epsilon_history
+                    }
+        save_results(result_dp, path+'result_privacy.csv')
 
     # Plot curves
     plot_curves(train_loss_history=train_losses, train_rouge_history=train_rouge,
