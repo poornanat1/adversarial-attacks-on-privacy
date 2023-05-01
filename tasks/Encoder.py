@@ -1,6 +1,4 @@
-# Ref: T5LayerNorm function from https://github.com/huggingface/transformers/blob/d95045717e1a5bd8ce71223b5b8920e27687dee4/src/transformers/models/t5/modeling_t5.py#L238
-# Ref: https://opacus.ai/api/dp_multihead_attention.html
-
+import os
 import torch
 import torch.nn as nn
 
@@ -13,10 +11,11 @@ class T5LayerNorm(nn.Module):
         Construct a layernorm module in the T5 style No bias and no subtraction of mean.
         """
         super().__init__()
-        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.weight = nn.Parameter(torch.ones(hidden_size)).to("cuda")
         self.variance_epsilon = eps
 
     def forward(self, hidden_states):
+        torch.cuda.empty_cache()
         # layer norm should always be calculated in float32
         variance = hidden_states.to(torch.float32).pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
@@ -63,6 +62,7 @@ class Encoder(nn.Module):
         )
 
     def forward(self, embedded_inputs):
+        torch.cuda.empty_cache()
         # self-attention layer
         embedded_inputs = self.norm_attn(embedded_inputs)
         attn_output, _ = self.self_attn(embedded_inputs, embedded_inputs, embedded_inputs)

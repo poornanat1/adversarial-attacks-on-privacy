@@ -7,7 +7,6 @@ from Encoder import T5LayerNorm
 
 from opacus.layers.dp_multihead_attention import DPMultiheadAttention
 
-
 class Decoder(nn.Module):
     """ 
         The decoder is similar in structure to the encoder except that it includes a standard attention mechanism 
@@ -16,7 +15,7 @@ class Decoder(nn.Module):
         attend to past outputs. 
     """
 
-    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1, dpsgd=False):
+    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1, device='cuda', dpsgd=False):
         super(Decoder, self).__init__()
 
         # initialize model parameters
@@ -24,6 +23,7 @@ class Decoder(nn.Module):
         self.num_heads = num_heads
         self.dropout = dropout
         self.feedforward_size = feedforward_size
+        self.device = device
 
         # Self-attention subcomponent
         self.norm_self_attn = T5LayerNorm(self.hidden_size)
@@ -52,10 +52,12 @@ class Decoder(nn.Module):
             nn.Dropout(p=self.dropout)
             )
 
-    def forward(self, inputs, enc_output, attn_mask):
+    def forward(self, inputs, enc_output, attn_mask, padding_mask):
+        torch.cuda.empty_cache()
+        padding_mask=padding_mask.transpose(0, 1)
         # multihead self attention
-        inputs = self.norm_self_attn(inputs)
-        masked_self_attn, _ = self.masked_self_attn(inputs, inputs, inputs, attn_mask=attn_mask)
+        inputs = self.norm_self_attn(inputs).to(self.device)
+        masked_self_attn, _ = self.masked_self_attn(inputs, inputs, inputs, attn_mask=attn_mask.to(self.device))
         masked_self_attn = self.dropout_self_attn(masked_self_attn)
 
         # residual skip connection adds each subcomponent’s input to its output
@@ -65,7 +67,7 @@ class Decoder(nn.Module):
         # In "encoder-decoder attention" layers, the queries come from the previous decoder layer, and the memory keys and values come from the output of the encoder. (Vaswani, 2017)
         skip_connection1 = self.norm_enc_dec_attn(skip_connection1)
         enc_output = self.norm_enc_dec_attn2(enc_output)
-        encoder_decoder_attn, _ = self.encoder_decoder_attn(skip_connection1, enc_output, enc_output)
+        encoder_decoder_attn, _ = self.encoder_decoder_attn(skip_connection1, enc_output, enc_output, key_padding_mask=padding_mask)
         encoder_decoder_attn = self.dropout_enc_dec_attn(encoder_decoder_attn)
 
         # residual skip connection adds each subcomponent’s input to its output
