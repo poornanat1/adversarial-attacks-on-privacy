@@ -80,7 +80,8 @@ class Summarizer(nn.Module):
 
         # ended_sequences = set()
         
-        for i in range(self.max_length):  
+        # for i in range(self.max_length):  
+        for i in range(20):
             # update attention mask
             attn_mask[i] = False
 
