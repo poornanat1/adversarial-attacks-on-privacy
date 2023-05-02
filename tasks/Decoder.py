@@ -15,7 +15,7 @@ class Decoder(nn.Module):
         attend to past outputs. 
     """
 
-    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1, device='cuda', dpsgd=False):
+    def __init__(self, hidden_size, num_heads, feedforward_size, device, dropout=0.1, dpsgd=False):
         super(Decoder, self).__init__()
 
         # initialize model parameters

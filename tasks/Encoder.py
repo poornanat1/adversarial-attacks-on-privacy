@@ -11,7 +11,7 @@ class T5LayerNorm(nn.Module):
         Construct a layernorm module in the T5 style No bias and no subtraction of mean.
         """
         super().__init__()
-        self.weight = nn.Parameter(torch.ones(hidden_size)).to("cuda")
+        self.weight = nn.Parameter(torch.ones(hidden_size))
         self.variance_epsilon = eps
 
     def forward(self, hidden_states):
@@ -41,7 +41,7 @@ class Encoder(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.feedforward_size = feedforward_size
-        self.dropout=dropout
+        self.dropout = dropout
 
         # Define self-attention layer
         self.norm_attn = T5LayerNorm(self.hidden_size)
