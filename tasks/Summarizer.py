@@ -23,41 +23,41 @@ class Summarizer(nn.Module):
         self.dpsgd = True if model_type=="dp-sgd" else False
 
         # initialize embedding layers
-        self.embed_encoder = Embed(self.input_size, self.hidden_size, self.max_length, self.device).to(self.device)
-        self.embed_decoder = Embed(self.output_size, self.hidden_size, self.max_length, self.device).to(self.device)
+        self.embed_encoder = Embed(self.input_size, self.hidden_size, self.max_length, self.device)
+        self.embed_decoder = Embed(self.output_size, self.hidden_size, self.max_length, self.device)
 
         # initialize encoder layers
-        self.enc_dropout_input = nn.Dropout(p=self.dropout).to(self.device)
+        self.enc_dropout_input = nn.Dropout(p=self.dropout)
         self.encoder1 = Encoder(hidden_size=self.hidden_size, 
                                 num_heads=self.num_heads,
                                 feedforward_size=self.hidden_size * 4, 
                                 dropout=self.dropout,
-                                dpsgd=self.dpsgd).to(self.device)
+                                dpsgd=self.dpsgd)
         self.encoder2 = Encoder(hidden_size=self.hidden_size, 
                                 num_heads=self.num_heads,
                                 feedforward_size=self.hidden_size * 4, 
                                 dropout=self.dropout,
-                                dpsgd=self.dpsgd).to(self.device)
-        self.enc_dropout_output = nn.Dropout(p=self.dropout).to(self.device)
+                                dpsgd=self.dpsgd)
+        self.enc_dropout_output = nn.Dropout(p=self.dropout)
         
         # initialize stack of decoder layers
-        self.dec_dropout_input = nn.Dropout(p=self.dropout).to(self.device)
+        self.dec_dropout_input = nn.Dropout(p=self.dropout)
         self.decoder1 = Decoder(hidden_size=self.hidden_size, 
                                 num_heads=self.num_heads, 
                                 feedforward_size=self.hidden_size * 4,
-                                dropout=self.dropout,
                                 device=self.device,
+                                dropout=self.dropout,
                                 dpsgd=self.dpsgd)
         self.decoder2 = Decoder(hidden_size=self.hidden_size, 
                                 num_heads=self.num_heads, 
                                 feedforward_size=self.hidden_size * 4,
-                                dropout=self.dropout,
                                 device=self.device,
+                                dropout=self.dropout,
                                 dpsgd=self.dpsgd)
-        self.dec_dropout_output = nn.Dropout(p=self.dropout).to(self.device)
+        self.dec_dropout_output = nn.Dropout(p=self.dropout)
 
         # initialize model final linear layer
-        self.final_linear = nn.Linear(self.hidden_size, self.output_size).to(self.device)
+        self.final_linear = nn.Linear(self.hidden_size, self.output_size)
 
     def forward(self, enc_inputs, use_checkpointing):
         torch.cuda.empty_cache()
@@ -72,22 +72,23 @@ class Summarizer(nn.Module):
         eos_token = 102
 
         # initial decoder inputs
-        model_outputs = torch.zeros(self.max_length, batch_size, self.output_size).to(self.device)
-        dec_inputs = torch.zeros((self.max_length, batch_size), dtype=torch.int64).to(self.device)
+        model_outputs = torch.zeros(self.max_length, batch_size, self.output_size)
+        dec_inputs = torch.zeros((self.max_length, batch_size), dtype=torch.int64)
         dec_inputs[0] = sos_token
         
         attn_mask = torch.logical_not(torch.tril(torch.ones((self.max_length, self.max_length), dtype=torch.bool)))
 
         # ended_sequences = set()
         
-        for i in range(self.max_length):  
+        # for i in range(self.max_length):  
+        for i in range(20):
             # update attention mask
             attn_mask[i] = False
 
             dec_embedding = self.embed_decoder(dec_inputs)
             d_out = self.decoder_layers(dec_embedding, enc_output, attn_mask, padding_mask, use_checkpointing)
             d_out_attention = d_out[1:i+1]
-            model_out = self.final_layers(d_out_attention)
+            model_out = self.final_layers(d_out_attention, use_checkpointing)
 
             # add predictions for this position to model_outputs
             model_outputs[1:i+1] = model_out
@@ -95,18 +96,6 @@ class Summarizer(nn.Module):
             # update dec_inputs
             predictions = torch.argmax(model_out, dim=2)
             dec_inputs[1:i+1] = predictions
-
-            # # If any predicted token is the EOS token, stop generating output for that sequence
-            # if eos_token in predictions:
-            #     break_indices = torch.where(predictions == eos_token)[0]
-            #     for j in break_indices:
-            #         # If the sequence has already ended, skip it
-            #         if j in ended_sequences:
-            #             continue
-            #         # Mark the sequence as ended
-            #         ended_sequences.add(j)
-            #         # Trim the output sequence for the ended sequence
-            #         dec_inputs[j,] = dec_inputs[j,:i+1]
 
         return model_outputs
 
@@ -141,7 +130,10 @@ class Summarizer(nn.Module):
         output = self.dec_dropout_output(decoder2)
         return output
 
-    def final_layers(self, inputs):
+    def final_layers(self, inputs, use_checkpointing):
         # linear
-        final_linear = checkpoint(self.final_linear, inputs)
+        if use_checkpointing:
+            final_linear = checkpoint(self.final_linear, inputs)
+        else:
+            final_linear = self.final_linear(inputs)
         return final_linear
