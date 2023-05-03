@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn as nn
 
-from opacus.layers.dp_multihead_attention import DPMultiheadAttention
+# from opacus.layers.dp_multihead_attention import DPMultiheadAttention #TODO uncomment
 
 
 class T5LayerNorm(nn.Module):

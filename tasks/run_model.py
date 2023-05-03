@@ -20,8 +20,8 @@ import numpy as np
 from tqdm import tqdm  # Tqdm progress bar
 from torch.utils.data import random_split
 from transformers import AutoTokenizer
-from opacus import PrivacyEngine
-from opacus.optimizers.utils import params
+# from opacus import PrivacyEngine #TODO uncomment
+# from opacus.optimizers.utils import params #TODO uncomment
 
 import datetime
 import time
@@ -138,10 +138,11 @@ def main():
     input_data = torch.load('../data/processed/tokenized_input_data.pt')
     target_data = torch.load('../data/processed/tokenized_target_data.pt')
     data = torch.cat((input_data, target_data), dim=1)
-    train_data, val_data, test_data = random_split(data, [0.8, 0.1, 0.1])
+    # train_data, val_data, test_data = random_split(data, [0.8, 0.1, 0.1]) #TODO uncomment
+    train_data, val_data, test_data = random_split(data, [1880, 235, 235]) #TODO delete
 
     # Define hyperparameters
-    EPOCHS = 10
+    EPOCHS = 1
     learning_rate = 1e-3
     input_size = torch.max(input_data).item() + 1
     hidden_size = 128

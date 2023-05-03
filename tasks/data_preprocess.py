@@ -13,7 +13,7 @@ import time
 import csv
 import re
 import nltk #added by Stephen
-nltk.download('stopwords') #added by Stephen
+nltk.download('stopwords')
 from nltk.corpus import stopwords
 import torch
 from transformers import AutoTokenizer
