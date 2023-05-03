@@ -15,11 +15,13 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import evaluate as e  
+import numpy as np
 
 from tqdm import tqdm  # Tqdm progress bar
 from torch.utils.data import random_split
 from transformers import AutoTokenizer
 from opacus import PrivacyEngine
+from opacus.optimizers.utils import params
 
 import datetime
 import time
@@ -33,7 +35,7 @@ def train(model, dataloader, optimizer, criterion, max_grad_norm = 0.5, schedule
     model.train()
 
     # Create scaler for mixed precision training
-    scaler = torch.cuda.amp.GradScaler()
+    # scaler = torch.cuda.amp.GradScaler()
 
     # Record total loss
     total_loss = 0.
@@ -49,21 +51,23 @@ def train(model, dataloader, optimizer, criterion, max_grad_norm = 0.5, schedule
         optimizer.zero_grad()
   
         # Use autocast to enable mixed precision training
-        with torch.cuda.amp.autocast():
-            summary = model(source, use_checkpointing=True)
-            summary = summary.reshape(-1, summary.shape[-1])
-            target = target.reshape(-1)
-            loss = criterion(summary, target)
+        # with torch.cuda.amp.autocast():
+        summary = model(source, use_checkpointing=False).to(device)
+        summary = summary.reshape(-1, summary.shape[-1])
+        target = target.reshape(-1)
+        loss = criterion(summary, target)
  
-        scaled_loss = scaler.scale(loss).backward()
+        # scaled_loss = scaler.scale(loss).backward()
+        loss.backward()
 
-        scaler.unscale_(optimizer)
+        # scaler.unscale_(optimizer)
         
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
 
-        scaler.step(optimizer)
-
-        scaler.update()
+        # scaler.step(optimizer)
+        optimizer.step()
+        
+        # scaler.update()
 
         total_loss += loss.item()
         progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
@@ -85,29 +89,32 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             source = data[:,0].transpose(1, 0).to(device)
             target_orig = data[:,1].transpose(1, 0).to(device)
             
-            summary_orig = model(source, use_checkpointing=False)
+            summary_orig = model(source, use_checkpointing=False).to(device)
             summary = summary_orig.reshape(-1, summary_orig.shape[-1])
             target = target_orig.reshape(-1)
 
             loss = criterion(summary, target)
             total_loss += loss.item()
 
-            tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+            # tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
-            decoded_summaries = []
-            decoded_targets = []
+            # decoded_summaries = []
+            # decoded_targets = []
 
-            summaries = summary_orig.argmax(dim=-1).squeeze().transpose(0,1).tolist()
-            targets = target_orig.squeeze(dim=0).transpose(0,1).tolist()
-            for i in range(len(summaries)): 
-                summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
-                target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
+            # print(summary_orig)
+            # print(summary_orig.argmax(dim=-1))
+            # summaries = summary_orig.argmax(dim=-1).squeeze().transpose(0,1).tolist()
+            # targets = target_orig.squeeze(dim=0).transpose(0,1).tolist()
+            # for i in range(len(summaries)): 
+            #     summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
+            #     target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
 
-                decoded_summaries.append(summary_text)
-                decoded_targets.append(target_text)
+            #     decoded_summaries.append(summary_text)
+            #     decoded_targets.append(target_text)
 
-            rouge_result = rouge.compute(predictions=decoded_summaries, references=decoded_targets)
-            total_rouge += rouge_result['rouge1']
+            # rouge_result = rouge.compute(predictions=decoded_summaries, references=decoded_targets)
+            # total_rouge += rouge_result['rouge1']
+            total_rouge += 0
 
             progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
 
@@ -137,7 +144,7 @@ def main():
     EPOCHS = 10
     learning_rate = 1e-3
     input_size = torch.max(input_data).item() + 1
-    hidden_size = 512
+    hidden_size = 128
     batch_size = 32
     output_size = input_size
     max_length = input_data.shape[2]
@@ -149,7 +156,8 @@ def main():
     train_loader, val_loader, test_loader = dataloader(train_data, val_data, test_data, batch_size=batch_size)
 
     # Initialize model, model modules, optimizer, and loss function
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     print("Using device:", device)
     model = Summarizer(input_size, hidden_size, output_size, device, max_length, num_heads, dropout, model_type).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
@@ -160,7 +168,7 @@ def main():
     if model_type=="dp-sgd":
         # Define DP-SGD specific hyperparameters
         noise_multiplier = 1.1 
-        max_grad_norm = 0.5
+        max_grad_norm = 1.0
         delta = 1e-5
 
         # Instantiate PrivacyEngine() and wrap optimizer
@@ -171,9 +179,10 @@ def main():
             optimizer=optimizer,
             data_loader=train_loader,
             noise_multiplier=noise_multiplier,
-            max_grad_norm=max_grad_norm,
+            max_grad_norm=[max_grad_norm] * len(params(optimizer)),
             poisson_sampling=False,
             grad_sample_mode = "functorch",
+            clipping='per_layer'
         )
 
         # Define array to store epsilon history
