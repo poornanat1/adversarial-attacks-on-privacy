@@ -96,25 +96,25 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             loss = criterion(summary, target)
             total_loss += loss.item()
 
-            # tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+            tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
-            # decoded_summaries = []
-            # decoded_targets = []
+            decoded_summaries = []
+            decoded_targets = []
 
-            # print(summary_orig)
-            # print(summary_orig.argmax(dim=-1))
-            # summaries = summary_orig.argmax(dim=-1).squeeze().transpose(0,1).tolist()
-            # targets = target_orig.squeeze(dim=0).transpose(0,1).tolist()
-            # for i in range(len(summaries)): 
-            #     summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
-            #     target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
+            summaries = summary_orig.argmax(dim=-1).squeeze().transpose(0,1).tolist()
+            targets = target_orig.squeeze(dim=0).transpose(0,1).tolist()
+            for i in range(len(summaries)): 
+                if -9223372036854775808 in summaries[i]:
+                    continue
+                else:
+                    summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
+                    target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
 
-            #     decoded_summaries.append(summary_text)
-            #     decoded_targets.append(target_text)
+                    decoded_summaries.append(summary_text)
+                    decoded_targets.append(target_text)
 
-            # rouge_result = rouge.compute(predictions=decoded_summaries, references=decoded_targets)
-            # total_rouge += rouge_result['rouge1']
-            total_rouge += 0
+                    rouge_result = rouge.compute(predictions=decoded_summaries, references=decoded_targets)
+                    total_rouge += rouge_result['rouge1']
 
             progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
 
