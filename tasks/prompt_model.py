@@ -86,6 +86,12 @@ def decode_output(output, tokenizer):
         decoded_output.append(output_text)
     return decoded_output
 
+def decode_output_str(output, tokenizer):
+    output_words = output.argmax(dim=-1)
+    output_words = output_words.squeeze()
+    output_text = tokenizer.decode(output_words, skip_special_tokens=True)
+    return output_text
+
 def main():
     prompt = "prostate cancer diagnosis"
     trial_name = "trial_2023-05-02_21-18_lr_0.001_bs_32"
