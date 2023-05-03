@@ -20,8 +20,8 @@ import numpy as np
 from tqdm import tqdm  # Tqdm progress bar
 from torch.utils.data import random_split
 from transformers import AutoTokenizer
-# from opacus import PrivacyEngine #TODO uncomment
-# from opacus.optimizers.utils import params #TODO uncomment
+from opacus import PrivacyEngine
+from opacus.optimizers.utils import params
 
 import datetime
 import time

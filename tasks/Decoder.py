@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from Encoder import T5LayerNorm
 
-# from opacus.layers.dp_multihead_attention import DPMultiheadAttention #TODO uncomment
+from opacus.layers.dp_multihead_attention import DPMultiheadAttention
 
 class Decoder(nn.Module):
     """ 
