@@ -5,6 +5,11 @@ import torch
 import random
 from data_preprocess import remove_stopwords_punctuation
 
+# INSTRUCTIONS
+# Update prompts & inputs in main() function and run prompt_model.py
+
+#////////
+
 def prompt_model(prompt, trial_name, model_type, device_type):
     model = load_model(trial_name, model_type, device_type)
     # Load the BERT tokenizer (https://huggingface.co/bert-base-uncased)
