@@ -1,9 +1,11 @@
 # Ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/t5/modeling_t5.py
+# Ref: https://opacus.ai/api/dp_multihead_attention.html
 
 import torch
 import torch.nn as nn
 from Encoder import T5LayerNorm
 
+from opacus.layers.dp_multihead_attention import DPMultiheadAttention
 
 class Decoder(nn.Module):
     """ 
@@ -13,7 +15,7 @@ class Decoder(nn.Module):
         attend to past outputs. 
     """
 
-    def __init__(self, hidden_size, num_heads, feedforward_size, dropout=0.1):
+    def __init__(self, hidden_size, num_heads, feedforward_size, device, dropout=0.1, dpsgd=False):
         super(Decoder, self).__init__()
 
         # initialize model parameters
@@ -21,16 +23,23 @@ class Decoder(nn.Module):
         self.num_heads = num_heads
         self.dropout = dropout
         self.feedforward_size = feedforward_size
+        self.device = device
 
         # Self-attention subcomponent
         self.norm_self_attn = T5LayerNorm(self.hidden_size)
-        self.masked_self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        if dpsgd:
+            self.masked_self_attn = DPMultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        else:
+            self.masked_self_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
         self.dropout_self_attn = nn.Dropout(p=self.dropout)
         
         # Encoder-decoder attention subcomponent
         self.norm_enc_dec_attn = T5LayerNorm(self.hidden_size)
         self.norm_enc_dec_attn2 = T5LayerNorm(self.hidden_size)
-        self.encoder_decoder_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        if dpsgd:
+            self.encoder_decoder_attn = DPMultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
+        else:
+            self.encoder_decoder_attn = nn.MultiheadAttention(self.hidden_size, self.num_heads, dropout=self.dropout)
         self.dropout_enc_dec_attn = nn.Dropout(p=self.dropout)
 
         # Feedforward network: Two linear transformations with a ReLU activation in between (Vaswani, 2017)
@@ -43,10 +52,12 @@ class Decoder(nn.Module):
             nn.Dropout(p=self.dropout)
             )
 
-    def forward(self, inputs, enc_output, attn_mask):
+    def forward(self, inputs, enc_output, attn_mask, padding_mask):
+        torch.cuda.empty_cache()
+        padding_mask=padding_mask.transpose(0, 1)
         # multihead self attention
-        inputs = self.norm_self_attn(inputs)
-        masked_self_attn, _ = self.masked_self_attn(inputs, inputs, inputs, attn_mask=attn_mask)
+        inputs = self.norm_self_attn(inputs).to(self.device)
+        masked_self_attn, _ = self.masked_self_attn(inputs, inputs, inputs, attn_mask=attn_mask.to(self.device))
         masked_self_attn = self.dropout_self_attn(masked_self_attn)
 
         # residual skip connection adds each subcomponent’s input to its output
@@ -56,7 +67,7 @@ class Decoder(nn.Module):
         # In "encoder-decoder attention" layers, the queries come from the previous decoder layer, and the memory keys and values come from the output of the encoder. (Vaswani, 2017)
         skip_connection1 = self.norm_enc_dec_attn(skip_connection1)
         enc_output = self.norm_enc_dec_attn2(enc_output)
-        encoder_decoder_attn, _ = self.encoder_decoder_attn(skip_connection1, enc_output, enc_output)
+        encoder_decoder_attn, _ = self.encoder_decoder_attn(skip_connection1, enc_output, enc_output, key_padding_mask=padding_mask)
         encoder_decoder_attn = self.dropout_enc_dec_attn(encoder_decoder_attn)
 
         # residual skip connection adds each subcomponent’s input to its output

@@ -22,3 +22,4 @@ dependencies:
       - Faker==18.4.0
       - evaluate
       - ipykernel
+      - opacus
