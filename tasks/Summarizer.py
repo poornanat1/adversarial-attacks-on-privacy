@@ -1,30 +1,138 @@
 import torch
 from torch import nn
+from Embed import Embed
+from Encoder import Encoder
+from Decoder import Decoder
+
+from torch.utils.checkpoint import checkpoint
+
 
 class Summarizer(nn.Module):
-    def __init__(self, input_size, emb_size, linear_size, output_size, device):
+    def __init__(self, input_size, hidden_size, output_size, device, max_length, num_heads, dropout, model_type="base"):
         super(Summarizer, self).__init__()
-        self.device = device
 
         # initialize model parameters
         self.input_size = input_size
-        self.emb_size = emb_size
-        self.linear_size = linear_size
+        self.hidden_size = hidden_size
         self.output_size = output_size
+        self.device = device
+        self.max_length = max_length
+        self.num_heads = num_heads
+        self.dropout = dropout
+        self.device = device
+        self.dpsgd = True if model_type=="dp-sgd" else False
 
-        # seed_torch(0) #TODO uncomment?
- 
-        #define layers
-        self.embedding = nn.Embedding(self.input_size, self.emb_size)
-        self.linear1 = nn.Linear(in_features = self.emb_size, out_features = self.linear_size)
-        self.relu1 = nn.ReLU()
-        self.linear2 = nn.Linear(in_features = self.linear_size, out_features = self.output_size)
-        self.softmax = nn.Softmax(dim=-1)
-       
-    def forward(self, inputs):
-        embedding = self.embedding(inputs)
-        linear1 = self.linear1(embedding)
-        relu1 = self.relu1(linear1)
-        linear2 = self.linear2(relu1)
-        output = self.softmax(linear2)
+        # initialize embedding layers
+        self.embed_encoder = Embed(self.input_size, self.hidden_size, self.max_length, self.device)
+        self.embed_decoder = Embed(self.output_size, self.hidden_size, self.max_length, self.device)
+
+        # initialize encoder layers
+        self.enc_dropout_input = nn.Dropout(p=self.dropout)
+        self.encoder1 = Encoder(hidden_size=self.hidden_size, 
+                                num_heads=self.num_heads,
+                                feedforward_size=self.hidden_size * 4, 
+                                dropout=self.dropout,
+                                dpsgd=self.dpsgd)
+        self.encoder2 = Encoder(hidden_size=self.hidden_size, 
+                                num_heads=self.num_heads,
+                                feedforward_size=self.hidden_size * 4, 
+                                dropout=self.dropout,
+                                dpsgd=self.dpsgd)
+        self.enc_dropout_output = nn.Dropout(p=self.dropout)
+        
+        # initialize stack of decoder layers
+        self.dec_dropout_input = nn.Dropout(p=self.dropout)
+        self.decoder1 = Decoder(hidden_size=self.hidden_size, 
+                                num_heads=self.num_heads, 
+                                feedforward_size=self.hidden_size * 4,
+                                device=self.device,
+                                dropout=self.dropout,
+                                dpsgd=self.dpsgd)
+        self.decoder2 = Decoder(hidden_size=self.hidden_size, 
+                                num_heads=self.num_heads, 
+                                feedforward_size=self.hidden_size * 4,
+                                device=self.device,
+                                dropout=self.dropout,
+                                dpsgd=self.dpsgd)
+        self.dec_dropout_output = nn.Dropout(p=self.dropout)
+
+        # initialize model final linear layer
+        self.final_linear = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, enc_inputs, use_checkpointing):
+        torch.cuda.empty_cache()
+
+        padding_mask = (enc_inputs == 0)
+
+        batch_size = enc_inputs.shape[1]
+        enc_embedding = self.embed_encoder(enc_inputs)
+        enc_output = self.encoder_layers(enc_embedding, use_checkpointing)
+
+        sos_token = 101
+        eos_token = 102
+
+        # initial decoder inputs
+        model_outputs = torch.zeros(self.max_length, batch_size, self.output_size)
+        dec_inputs = torch.zeros((self.max_length, batch_size), dtype=torch.int64)
+        dec_inputs[0] = sos_token
+        
+        attn_mask = torch.logical_not(torch.tril(torch.ones((self.max_length, self.max_length), dtype=torch.bool)))
+
+        # ended_sequences = set()
+        
+        for i in range(self.max_length):  
+            # update attention mask
+            attn_mask[i] = False
+
+            dec_embedding = self.embed_decoder(dec_inputs)
+            d_out = self.decoder_layers(dec_embedding, enc_output, attn_mask, padding_mask, use_checkpointing)
+            d_out_attention = d_out[1:i+1]
+            model_out = self.final_layers(d_out_attention, use_checkpointing)
+
+            # add predictions for this position to model_outputs
+            model_outputs[1:i+1] = model_out
+
+            # update dec_inputs
+            predictions = torch.argmax(model_out, dim=2)
+            dec_inputs[1:i+1] = predictions
+
+        return model_outputs
+
+    def encoder_layers(self, inputs, use_checkpointing):
+      
+        # dropout at the input of the entire stack
+        inputs = self.enc_dropout_input(inputs)
+
+        if use_checkpointing:
+            encoder1 = checkpoint(self.encoder1, inputs)
+            encoder2 = checkpoint(self.encoder2, encoder1)
+        else:
+            encoder1 = self.encoder1(inputs)
+            encoder2 = self.encoder2(encoder1)
+
+        # dropout at the output of the entire stack
+        output = self.enc_dropout_output(encoder2)
         return output
+
+    def decoder_layers(self, inputs, encoder_outputs, attn_mask, padding_mask, use_checkpointing):
+        # dropout at the input of the entire stack
+        inputs = self.dec_dropout_input(inputs)
+
+        if use_checkpointing:
+            decoder1 = checkpoint(self.decoder1, inputs.clone(), encoder_outputs.clone(), attn_mask.clone(), padding_mask)
+            decoder2 = checkpoint(self.decoder2, decoder1.clone(), encoder_outputs.clone(), attn_mask.clone(), padding_mask)
+        else:
+            decoder1 = self.decoder1(inputs, encoder_outputs, attn_mask, padding_mask)
+            decoder2 = self.decoder2(decoder1, encoder_outputs, attn_mask, padding_mask)
+
+        # dropout at the output of the entire stack
+        output = self.dec_dropout_output(decoder2)
+        return output
+
+    def final_layers(self, inputs, use_checkpointing):
+        # linear
+        if use_checkpointing:
+            final_linear = checkpoint(self.final_linear, inputs)
+        else:
+            final_linear = self.final_linear(inputs)
+        return final_linear

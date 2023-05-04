@@ -1,2 +1,7 @@
 
 .DS_Store
+*.csv
+*.pt
+*.png
+*.pyc
+*.json
