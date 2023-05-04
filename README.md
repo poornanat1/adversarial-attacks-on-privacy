@@ -12,3 +12,6 @@ To run a specific model_type, execute any of the following:
 - `python run_model.py dp-sgd`
 - `python run_model.py base`
 4) To interact with the model and visualize the model output, `model_playground.ipynb` is provided and contains functions to load the model checkpoint from the saved results for prompting. Note that due to GitHub file size restrictions, this repository does not contain any of our trained model checkpoints.
+
+## Acknowledgements
+We would like to thank Dr. Kira Zsolt and the teaching staff at Georgia Institute of Technology for their guidance and support.
