@@ -101,20 +101,19 @@ def evaluate(model, dataloader, criterion, rouge, device='cpu'):
             decoded_summaries = []
             decoded_targets = []
 
-            summaries = summary_orig.argmax(dim=-1).squeeze().transpose(0,1).tolist()
+            max_vals, max_indices = torch.max(summary_orig, dim=-1)
+            summaries = max_indices.squeeze().transpose(0, 1).tolist()
+            # summaries = summary_orig.argmax(dim=-1).squeeze().transpose(0,1).tolist()
             targets = target_orig.squeeze(dim=0).transpose(0,1).tolist()
             for i in range(len(summaries)): 
-                if -9223372036854775808 in summaries[i]:
-                    continue
-                else:
-                    summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
-                    target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
+                summary_text = tokenizer.decode(summaries[i], skip_special_tokens=True)
+                target_text = tokenizer.decode(targets[i], skip_special_tokens=True)
 
-                    decoded_summaries.append(summary_text)
-                    decoded_targets.append(target_text)
+                decoded_summaries.append(summary_text)
+                decoded_targets.append(target_text)
 
-                    rouge_result = rouge.compute(predictions=decoded_summaries, references=decoded_targets)
-                    total_rouge += rouge_result['rouge1']
+                rouge_result = rouge.compute(predictions=decoded_summaries, references=decoded_targets)
+                total_rouge += rouge_result['rouge1']
 
             progress_bar.set_description_str("Batch: %d, Loss: %.4f" % ((batch_idx + 1), loss.item()))
 
@@ -167,7 +166,7 @@ def main():
     # Attach privacy engine to optimizer if running dp-sgd model
     if model_type=="dp-sgd":
         # Define DP-SGD specific hyperparameters
-        noise_multiplier = 1.1 
+        noise_multiplier = 1.5
         max_grad_norm = 1.0
         delta = 1e-5
 
